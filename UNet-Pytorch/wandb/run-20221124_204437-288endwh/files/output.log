@@ -1,0 +1,43 @@
+INFO: Starting training:
+        Epochs:          5
+        Batch size:      1
+        Learning rate:   1e-05
+        Training size:   4580
+        Validation size: 508
+        Checkpoints:     True
+        Device:          cuda
+        Images scaling:  0.5
+        Mixed Precision: True
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Epoch 1/5:   0%|       | 19/4580 [01:31<6:06:44,  4.82s/img, loss (batch)=0.547]
+INFO: Saved interrupt
+Traceback (most recent call last):
+  File "/home/hewei/TUM/Unet-pytorch/Pytorch-UNet/train.py", line 188, in <module>
+    train_net(net=net,
+  File "/home/hewei/TUM/Unet-pytorch/Pytorch-UNet/train.py", line 100, in train_net
+    grad_scaler.step(optimizer)
+  File "/home/hewei/miniconda3/envs/i2dl/lib/python3.10/site-packages/torch/cuda/amp/grad_scaler.py", line 338, in step
+    retval = self._maybe_opt_step(optimizer, optimizer_state, *args, **kwargs)
+  File "/home/hewei/miniconda3/envs/i2dl/lib/python3.10/site-packages/torch/cuda/amp/grad_scaler.py", line 284, in _maybe_opt_step
+    if not sum(v.item() for v in optimizer_state["found_inf_per_device"].values()):
+  File "/home/hewei/miniconda3/envs/i2dl/lib/python3.10/site-packages/torch/cuda/amp/grad_scaler.py", line 284, in <genexpr>
+    if not sum(v.item() for v in optimizer_state["found_inf_per_device"].values()):
+KeyboardInterrupt
