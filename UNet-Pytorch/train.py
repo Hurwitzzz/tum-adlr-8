@@ -15,6 +15,8 @@ from utils.data_loading import BasicDataset, CarvanaDataset
 from utils.dice_score import dice_loss
 from evaluate import evaluate
 from unet import UNet
+from utils.utils import plot_example_imgs_from_dataset
+import matplotlib.pyplot as plt
 
 dir_img = Path('./data/sampled/02691156/')
 dir_mask = Path('./data/truemask/02691156/')
@@ -29,6 +31,7 @@ def train_net(net,
               batch_size: int = 1,
               learning_rate: float = 1e-5,
               val_percent: float = 0.1,
+              test_percent: float=0.1,
               save_checkpoint: bool = True,
               img_scale: float = 1,
               amp: bool = False):
@@ -40,13 +43,31 @@ def train_net(net,
 
     # 2. Split into train / validation partitions
     n_val = int(len(dataset) * val_percent)
-    n_train = len(dataset) - n_val
-    train_set, val_set = random_split(dataset, [n_train, n_val], generator=torch.Generator().manual_seed(0))
+    n_test = int(len(dataset) * test_percent)
+    n_train = len(dataset) - n_val-n_test
+    
+    train_set, val_set, test_set = random_split(dataset, [n_train, n_val,n_test], generator=torch.Generator().manual_seed(0))
 
+    #2.1 have a look at the example imgs
+    plot_example_imgs_from_dataset(train_set,2)
+    
+    # testmask=train_set[0]['mask']
+    # testimg=train_set[0]['image']
+    # testimg=testimg.squeeze(0)
+    # plt.figure(figsize=(10,5))
+    # plt.subplot(1,2,1)
+    # plt.imshow(testimg.numpy())
+    # plt.subplot(1,2,2)
+    # plt.imshow(testmask.numpy())
+    # plt.show()
+    
+    
+    
     # 3. Create data loaders
     loader_args = dict(batch_size=batch_size, num_workers=4, pin_memory=True)
     train_loader = DataLoader(train_set, shuffle=True, **loader_args)
     val_loader = DataLoader(val_set, shuffle=False, drop_last=True, **loader_args)
+    test_loader=DataLoader(test_set, shuffle=False, drop_last=True, **loader_args)
 
     # (Initialize logging)
     experiment = wandb.init(project='U-Net', resume='allow', anonymous='must')
@@ -154,7 +175,7 @@ def get_args():
     parser.add_argument('--learning-rate', '-l', metavar='LR', type=float, default=1e-5,
                         help='Learning rate', dest='lr')
     parser.add_argument('--load', '-f', type=str, default=False, help='Load model from a .pth file')
-    parser.add_argument('--scale', '-s', type=float, default=0.5, help='Downscaling factor of the images')
+    parser.add_argument('--scale', '-s', type=float, default=1, help='Downscaling factor of the images')
     parser.add_argument('--validation', '-v', dest='val', type=float, default=10.0,
                         help='Percent of the data that is used as validation (0-100)')
     parser.add_argument('--amp', action='store_true', default=False, help='Use mixed precision')
@@ -195,6 +216,7 @@ if __name__ == '__main__':
                   device=device,
                   img_scale=args.scale,
                   val_percent=args.val / 100,
+                  test_percent=0.1,
                   amp=args.amp)
     except KeyboardInterrupt:
         torch.save(net.state_dict(), 'INTERRUPTED.pth')
