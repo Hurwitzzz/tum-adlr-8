@@ -16,7 +16,6 @@ from utils.dice_score import dice_loss
 from evaluate import evaluate
 from unet import UNet
 from utils.utils import plot_example_imgs_from_dataset
-import matplotlib.pyplot as plt
 
 dir_img = Path('./data/sampled/02691156/')
 dir_mask = Path('./data/truemask/02691156/')
@@ -49,17 +48,7 @@ def train_net(net,
     train_set, val_set, test_set = random_split(dataset, [n_train, n_val,n_test], generator=torch.Generator().manual_seed(0))
 
     #2.1 have a look at the example imgs
-    plot_example_imgs_from_dataset(train_set,2)
-    
-    # testmask=train_set[0]['mask']
-    # testimg=train_set[0]['image']
-    # testimg=testimg.squeeze(0)
-    # plt.figure(figsize=(10,5))
-    # plt.subplot(1,2,1)
-    # plt.imshow(testimg.numpy())
-    # plt.subplot(1,2,2)
-    # plt.imshow(testmask.numpy())
-    # plt.show()
+    plot_example_imgs_from_dataset(train_set,4)
     
     
     
@@ -100,6 +89,9 @@ def train_net(net,
         epoch_loss = 0
         with tqdm(total=n_train, desc=f'Epoch {epoch}/{epochs}', unit='img') as pbar:
             for batch in train_loader:
+                #batch is dict{'image':....., 'mask':....}
+                # The shape of image is [batch_size,1,100,100], 
+                # that of mask is [batch_size,100,100]
                 images = batch['image']
                 true_masks = batch['mask']
 
@@ -171,7 +163,7 @@ def train_net(net,
 def get_args():
     parser = argparse.ArgumentParser(description='Train the UNet on images and target masks')
     parser.add_argument('--epochs', '-e', metavar='E', type=int, default=5, help='Number of epochs')
-    parser.add_argument('--batch-size', '-b', dest='batch_size', metavar='B', type=int, default=1, help='Batch size')
+    parser.add_argument('--batch-size', '-b', dest='batch_size', metavar='B', type=int, default=3, help='Batch size')
     parser.add_argument('--learning-rate', '-l', metavar='LR', type=float, default=1e-5,
                         help='Learning rate', dest='lr')
     parser.add_argument('--load', '-f', type=str, default=False, help='Load model from a .pth file')
@@ -194,9 +186,9 @@ if __name__ == '__main__':
     logging.info(f'Using device {device}')
 
     # Change here to adapt to your data
-    # n_channels=3 for RGB images
+    # n_channels=3 for RGB images, =1 for our input
     # n_classes is the number of probabilities you want to get per pixel
-    net = UNet(n_channels=3, n_classes=args.classes, bilinear=args.bilinear)
+    net = UNet(n_channels=1, n_classes=args.classes, bilinear=args.bilinear)
 
     logging.info(f'Network:\n'
                  f'\t{net.n_channels} input channels\n'
