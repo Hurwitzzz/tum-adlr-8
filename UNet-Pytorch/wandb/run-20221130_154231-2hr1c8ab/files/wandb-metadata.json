@@ -1,0 +1,85 @@
+{
+    "os": "Linux-5.4.0-132-generic-x86_64-with-glibc2.31",
+    "python": "3.10.4",
+    "heartbeatAt": "2022-11-30T14:42:33.036353",
+    "startedAt": "2022-11-30T14:42:31.976344",
+    "docker": null,
+    "cuda": null,
+    "args": [],
+    "state": "running",
+    "program": "/home/hewei/TUM/ADLR/tum-adlr-8/UNet-Pytorch/train.py",
+    "codePath": "UNet-Pytorch/train.py",
+    "git": {
+        "remote": "git@github.com:darktheorys/tum-adlr-8.git",
+        "commit": "8a6266ed782db5251bd639f5d0944905bdaf79cc"
+    },
+    "email": "75025768+Hurwitzzz@users.noreply.github.com",
+    "root": "/home/hewei/TUM/ADLR/tum-adlr-8",
+    "host": "hewei-Ubuntu",
+    "username": "hewei",
+    "executable": "/home/hewei/miniconda3/envs/i2dl/bin/python",
+    "cpu_count": 4,
+    "cpu_count_logical": 8,
+    "cpu_freq": {
+        "current": 3.1755,
+        "min": 800.0,
+        "max": 3500.0
+    },
+    "cpu_freq_per_core": [
+        {
+            "current": 3.216,
+            "min": 800.0,
+            "max": 3500.0
+        },
+        {
+            "current": 3.216,
+            "min": 800.0,
+            "max": 3500.0
+        },
+        {
+            "current": 3.128,
+            "min": 800.0,
+            "max": 3500.0
+        },
+        {
+            "current": 3.169,
+            "min": 800.0,
+            "max": 3500.0
+        },
+        {
+            "current": 3.179,
+            "min": 800.0,
+            "max": 3500.0
+        },
+        {
+            "current": 3.208,
+            "min": 800.0,
+            "max": 3500.0
+        },
+        {
+            "current": 3.145,
+            "min": 800.0,
+            "max": 3500.0
+        },
+        {
+            "current": 3.143,
+            "min": 800.0,
+            "max": 3500.0
+        }
+    ],
+    "disk": {
+        "total": 130.35214233398438,
+        "used": 76.15544509887695
+    },
+    "gpu": "NVIDIA GeForce GTX 950M",
+    "gpu_count": 1,
+    "gpu_devices": [
+        {
+            "name": "NVIDIA GeForce GTX 950M",
+            "memory_total": 4294967296
+        }
+    ],
+    "memory": {
+        "total": 15.432613372802734
+    }
+}

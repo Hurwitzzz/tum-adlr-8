@@ -1,0 +1,12 @@
+INFO: Starting training:
+        Epochs:          2
+        Batch size:      3
+        Learning rate:   1e-05
+        Training size:   65280
+        Validation size: 8160
+        Checkpoints:     True
+        Device:          cuda
+        Images scaling:  1
+        Mixed Precision: False
+Epoch 1/2:   0%|                                                                                         | 3/65280 [00:01<9:21:57,  1.94img/s]
+

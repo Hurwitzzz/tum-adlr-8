@@ -1,0 +1,50 @@
+INFO: Starting training:
+        Epochs:          5
+        Batch size:      3
+        Learning rate:   1e-05
+        Training size:   65280
+        Validation size: 8160
+        Checkpoints:     True
+        Device:          cpu
+        Images scaling:  1
+        Mixed Precision: False
+Epoch 1/5:   0%|                                                                                                                                            | 0/65280 [00:00<?, ?img/s]
+The file name is
+The file name is
+The file name is
+The file name is
+The file name is
+The file name is
+The file name is
+The file name is
+The file name is
+The file name is
+The file name is
+The file name is
+The file name is
+The file name is
+The file name is
+The file name is
+The file name is
+The file name is
+The file name is
+The file name is
+The file name is
+The file name is
+The file name is
+The file name is
+The file name is
+The file name is
+Epoch 1/5:   0%|                                                                                                                                            | 0/65280 [00:05<?, ?img/s]
+Traceback (most recent call last):
+  File "/home/hewei/TUM/ADLR/tum-adlr-8/UNet-Pytorch/train.py", line 204, in <module>
+    train_net(net=net,
+  File "/home/hewei/TUM/ADLR/tum-adlr-8/UNet-Pytorch/train.py", line 108, in train_net
+    loss = criterion(masks_pred, true_masks) \
+  File "/home/hewei/miniconda3/envs/i2dl/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1110, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "/home/hewei/miniconda3/envs/i2dl/lib/python3.10/site-packages/torch/nn/modules/loss.py", line 1163, in forward
+    return F.cross_entropy(input, target, weight=self.weight,
+  File "/home/hewei/miniconda3/envs/i2dl/lib/python3.10/site-packages/torch/nn/functional.py", line 2996, in cross_entropy
+    return torch._C._nn.cross_entropy_loss(input, target, weight, _Reduction.get_enum(reduction), ignore_index, label_smoothing)
+IndexError: Target 255 is out of bounds.

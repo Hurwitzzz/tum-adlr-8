@@ -1,0 +1,85 @@
+2022-11-30 14:55:19,442 INFO    StreamThr :31722 [internal.py:wandb_internal():88] W&B internal server running at pid: 31722, started at: 2022-11-30 14:55:19.440922
+2022-11-30 14:55:19,454 DEBUG   HandlerThread:31722 [handler.py:handle_request():139] handle_request: status
+2022-11-30 14:55:19,454 DEBUG   SenderThread:31722 [sender.py:send_request():317] send_request: status
+2022-11-30 14:55:19,462 INFO    WriterThread:31722 [datastore.py:open_for_write():75] open: /home/hewei/TUM/ADLR/tum-adlr-8/UNet-Pytorch/wandb/run-20221130_145519-34dogzlb/run-34dogzlb.wandb
+2022-11-30 14:55:19,463 DEBUG   SenderThread:31722 [sender.py:send():303] send: header
+2022-11-30 14:55:19,463 DEBUG   SenderThread:31722 [sender.py:send():303] send: run
+2022-11-30 14:55:19,470 INFO    SenderThread:31722 [sender.py:_maybe_setup_resume():593] checking resume status for None/U-Net/34dogzlb
+2022-11-30 14:55:20,793 DEBUG   HandlerThread:31722 [handler.py:handle_request():139] handle_request: check_version
+2022-11-30 14:55:20,808 INFO    SenderThread:31722 [dir_watcher.py:__init__():216] watching files in: /home/hewei/TUM/ADLR/tum-adlr-8/UNet-Pytorch/wandb/run-20221130_145519-34dogzlb/files
+2022-11-30 14:55:20,809 INFO    SenderThread:31722 [sender.py:_start_run_threads():928] run started: 34dogzlb with start time 1669816519.433218
+2022-11-30 14:55:20,809 DEBUG   SenderThread:31722 [sender.py:send():303] send: summary
+2022-11-30 14:55:20,810 INFO    SenderThread:31722 [sender.py:_save_file():1171] saving file wandb-summary.json with policy end
+2022-11-30 14:55:20,811 DEBUG   SenderThread:31722 [sender.py:send_request():317] send_request: check_version
+2022-11-30 14:55:21,294 DEBUG   HandlerThread:31722 [handler.py:handle_request():139] handle_request: run_start
+2022-11-30 14:55:21,304 DEBUG   HandlerThread:31722 [system_info.py:__init__():31] System info init
+2022-11-30 14:55:21,304 DEBUG   HandlerThread:31722 [system_info.py:__init__():46] System info init done
+2022-11-30 14:55:21,304 INFO    HandlerThread:31722 [system_monitor.py:start():150] Starting system monitor
+2022-11-30 14:55:21,305 INFO    SystemMonitor:31722 [system_monitor.py:_start():116] Starting system asset monitoring threads
+2022-11-30 14:55:21,305 INFO    HandlerThread:31722 [system_monitor.py:probe():168] Collecting system info
+2022-11-30 14:55:21,307 INFO    SystemMonitor:31722 [interfaces.py:start():168] Started cpu
+2022-11-30 14:55:21,308 INFO    SystemMonitor:31722 [interfaces.py:start():168] Started disk
+2022-11-30 14:55:21,312 INFO    SystemMonitor:31722 [interfaces.py:start():168] Started gpu
+2022-11-30 14:55:21,314 INFO    SystemMonitor:31722 [interfaces.py:start():168] Started memory
+2022-11-30 14:55:21,317 INFO    SystemMonitor:31722 [interfaces.py:start():168] Started network
+2022-11-30 14:55:21,348 DEBUG   HandlerThread:31722 [system_info.py:probe():195] Probing system
+2022-11-30 14:55:21,351 DEBUG   HandlerThread:31722 [system_info.py:_probe_git():180] Probing git
+2022-11-30 14:55:21,365 DEBUG   HandlerThread:31722 [system_info.py:_probe_git():188] Probing git done
+2022-11-30 14:55:21,365 DEBUG   HandlerThread:31722 [system_info.py:probe():241] Probing system done
+2022-11-30 14:55:21,365 DEBUG   HandlerThread:31722 [system_monitor.py:probe():177] {'os': 'Linux-5.4.0-132-generic-x86_64-with-glibc2.31', 'python': '3.10.4', 'heartbeatAt': '2022-11-30T13:55:21.348984', 'startedAt': '2022-11-30T13:55:19.420806', 'docker': None, 'cuda': None, 'args': (), 'state': 'running', 'program': '/home/hewei/TUM/ADLR/tum-adlr-8/UNet-Pytorch/train.py', 'codePath': 'UNet-Pytorch/train.py', 'git': {'remote': 'git@github.com:darktheorys/tum-adlr-8.git', 'commit': '8a6266ed782db5251bd639f5d0944905bdaf79cc'}, 'email': '75025768+Hurwitzzz@users.noreply.github.com', 'root': '/home/hewei/TUM/ADLR/tum-adlr-8', 'host': 'hewei-Ubuntu', 'username': 'hewei', 'executable': '/home/hewei/miniconda3/envs/i2dl/bin/python', 'cpu_count': 4, 'cpu_count_logical': 8, 'cpu_freq': {'current': 3.1101250000000005, 'min': 800.0, 'max': 3500.0}, 'cpu_freq_per_core': [{'current': 3.1, 'min': 800.0, 'max': 3500.0}, {'current': 3.1, 'min': 800.0, 'max': 3500.0}, {'current': 3.11, 'min': 800.0, 'max': 3500.0}, {'current': 3.127, 'min': 800.0, 'max': 3500.0}, {'current': 3.1, 'min': 800.0, 'max': 3500.0}, {'current': 3.113, 'min': 800.0, 'max': 3500.0}, {'current': 3.102, 'min': 800.0, 'max': 3500.0}, {'current': 3.129, 'min': 800.0, 'max': 3500.0}], 'disk': {'total': 130.35214233398438, 'used': 76.13952255249023}, 'gpu': 'NVIDIA GeForce GTX 950M', 'gpu_count': 1, 'gpu_devices': [{'name': 'NVIDIA GeForce GTX 950M', 'memory_total': 4294967296}], 'memory': {'total': 15.432613372802734}}
+2022-11-30 14:55:21,365 INFO    HandlerThread:31722 [system_monitor.py:probe():178] Finished collecting system info
+2022-11-30 14:55:21,365 INFO    HandlerThread:31722 [system_monitor.py:probe():181] Publishing system info
+2022-11-30 14:55:21,366 DEBUG   HandlerThread:31722 [system_info.py:_save_pip():51] Saving list of pip packages installed into the current environment
+2022-11-30 14:55:21,371 DEBUG   HandlerThread:31722 [system_info.py:_save_pip():67] Saving pip packages done
+2022-11-30 14:55:21,371 DEBUG   HandlerThread:31722 [system_info.py:_save_conda():74] Saving list of conda packages installed into the current environment
+2022-11-30 14:55:21,819 INFO    Thread-19 :31722 [dir_watcher.py:_on_file_created():275] file/dir created: /home/hewei/TUM/ADLR/tum-adlr-8/UNet-Pytorch/wandb/run-20221130_145519-34dogzlb/files/conda-environment.yaml
+2022-11-30 14:55:21,820 INFO    Thread-19 :31722 [dir_watcher.py:_on_file_created():275] file/dir created: /home/hewei/TUM/ADLR/tum-adlr-8/UNet-Pytorch/wandb/run-20221130_145519-34dogzlb/files/wandb-summary.json
+2022-11-30 14:55:21,821 INFO    Thread-19 :31722 [dir_watcher.py:_on_file_created():275] file/dir created: /home/hewei/TUM/ADLR/tum-adlr-8/UNet-Pytorch/wandb/run-20221130_145519-34dogzlb/files/requirements.txt
+2022-11-30 14:55:24,809 DEBUG   HandlerThread:31722 [system_info.py:_save_conda():86] Saving conda packages done
+2022-11-30 14:55:24,817 INFO    HandlerThread:31722 [system_monitor.py:probe():183] Finished publishing system info
+2022-11-30 14:55:24,818 INFO    Thread-19 :31722 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/hewei/TUM/ADLR/tum-adlr-8/UNet-Pytorch/wandb/run-20221130_145519-34dogzlb/files/conda-environment.yaml
+2022-11-30 14:55:24,819 INFO    Thread-19 :31722 [dir_watcher.py:_on_file_created():275] file/dir created: /home/hewei/TUM/ADLR/tum-adlr-8/UNet-Pytorch/wandb/run-20221130_145519-34dogzlb/files/wandb-metadata.json
+2022-11-30 14:55:24,954 DEBUG   SenderThread:31722 [sender.py:send():303] send: files
+2022-11-30 14:55:24,954 INFO    SenderThread:31722 [sender.py:_save_file():1171] saving file wandb-metadata.json with policy now
+2022-11-30 14:55:24,978 DEBUG   HandlerThread:31722 [handler.py:handle_request():139] handle_request: stop_status
+2022-11-30 14:55:24,979 DEBUG   SenderThread:31722 [sender.py:send_request():317] send_request: stop_status
+2022-11-30 14:55:25,303 DEBUG   SenderThread:31722 [sender.py:send():303] send: telemetry
+2022-11-30 14:55:25,304 DEBUG   SenderThread:31722 [sender.py:send():303] send: config
+2022-11-30 14:55:25,725 INFO    Thread-22 :31722 [upload_job.py:push():143] Uploaded file /tmp/tmpddaovakmwandb/tmeyq0pk-wandb-metadata.json
+2022-11-30 14:55:25,824 INFO    Thread-19 :31722 [dir_watcher.py:_on_file_created():275] file/dir created: /home/hewei/TUM/ADLR/tum-adlr-8/UNet-Pytorch/wandb/run-20221130_145519-34dogzlb/files/output.log
+2022-11-30 14:55:27,826 INFO    Thread-19 :31722 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/hewei/TUM/ADLR/tum-adlr-8/UNet-Pytorch/wandb/run-20221130_145519-34dogzlb/files/output.log
+2022-11-30 14:55:29,827 INFO    Thread-19 :31722 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/hewei/TUM/ADLR/tum-adlr-8/UNet-Pytorch/wandb/run-20221130_145519-34dogzlb/files/output.log
+2022-11-30 14:55:31,829 INFO    Thread-19 :31722 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/hewei/TUM/ADLR/tum-adlr-8/UNet-Pytorch/wandb/run-20221130_145519-34dogzlb/files/output.log
+2022-11-30 14:55:51,851 INFO    Thread-19 :31722 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/hewei/TUM/ADLR/tum-adlr-8/UNet-Pytorch/wandb/run-20221130_145519-34dogzlb/files/config.yaml
+2022-11-30 14:56:21,318 DEBUG   SystemMonitor:31722 [system_monitor.py:_start():130] Starting system metrics aggregation loop
+2022-11-30 14:56:21,325 DEBUG   SenderThread:31722 [sender.py:send():303] send: stats
+2022-11-30 14:56:51,327 DEBUG   SenderThread:31722 [sender.py:send():303] send: stats
+2022-11-30 14:57:21,331 DEBUG   SenderThread:31722 [sender.py:send():303] send: stats
+2022-11-30 14:57:51,335 DEBUG   SenderThread:31722 [sender.py:send():303] send: stats
+2022-11-30 14:58:21,339 DEBUG   SenderThread:31722 [sender.py:send():303] send: stats
+2022-11-30 14:58:51,343 DEBUG   SenderThread:31722 [sender.py:send():303] send: stats
+2022-11-30 14:59:21,347 DEBUG   SenderThread:31722 [sender.py:send():303] send: stats
+2022-11-30 14:59:51,351 DEBUG   SenderThread:31722 [sender.py:send():303] send: stats
+2022-11-30 15:00:21,355 DEBUG   SenderThread:31722 [sender.py:send():303] send: stats
+2022-11-30 15:00:51,358 DEBUG   SenderThread:31722 [sender.py:send():303] send: stats
+2022-11-30 15:01:21,362 DEBUG   SenderThread:31722 [sender.py:send():303] send: stats
+2022-11-30 15:01:51,366 DEBUG   SenderThread:31722 [sender.py:send():303] send: stats
+2022-11-30 15:02:21,370 DEBUG   SenderThread:31722 [sender.py:send():303] send: stats
+2022-11-30 15:02:51,373 DEBUG   SenderThread:31722 [sender.py:send():303] send: stats
+2022-11-30 15:03:21,377 DEBUG   SenderThread:31722 [sender.py:send():303] send: stats
+2022-11-30 15:03:51,381 DEBUG   SenderThread:31722 [sender.py:send():303] send: stats
+2022-11-30 15:04:21,385 DEBUG   SenderThread:31722 [sender.py:send():303] send: stats
+2022-11-30 15:04:51,388 DEBUG   SenderThread:31722 [sender.py:send():303] send: stats
+2022-11-30 15:05:21,392 DEBUG   SenderThread:31722 [sender.py:send():303] send: stats
+2022-11-30 15:05:51,397 DEBUG   SenderThread:31722 [sender.py:send():303] send: stats
+2022-11-30 15:06:21,400 DEBUG   SenderThread:31722 [sender.py:send():303] send: stats
+2022-11-30 15:06:51,404 DEBUG   SenderThread:31722 [sender.py:send():303] send: stats
+2022-11-30 15:07:13,881 DEBUG   HandlerThread:31722 [handler.py:handle_request():139] handle_request: stop_status
+2022-11-30 15:07:13,883 DEBUG   SenderThread:31722 [sender.py:send_request():317] send_request: stop_status
+2022-11-30 15:07:21,404 DEBUG   SenderThread:31722 [sender.py:send():303] send: stats
+2022-11-30 15:07:51,437 DEBUG   SenderThread:31722 [sender.py:send():303] send: stats
+2022-11-30 15:08:06,452 DEBUG   HandlerThread:31722 [handler.py:handle_request():139] handle_request: stop_status
+2022-11-30 15:08:06,454 DEBUG   SenderThread:31722 [sender.py:send_request():317] send_request: stop_status
+2022-11-30 15:08:11,411 INFO    Thread-19 :31722 [dir_watcher.py:_on_file_modified():292] file/dir modified: /home/hewei/TUM/ADLR/tum-adlr-8/UNet-Pytorch/wandb/run-20221130_145519-34dogzlb/files/output.log
+2022-11-30 15:08:21,412 DEBUG   SenderThread:31722 [sender.py:send():303] send: stats
+2022-11-30 15:08:51,416 DEBUG   SenderThread:31722 [sender.py:send():303] send: stats

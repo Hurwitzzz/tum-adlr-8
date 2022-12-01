@@ -40,7 +40,10 @@ class BasicDataset(Dataset):
                 img_ndarray = img_ndarray.transpose((2, 0, 1)) #tensor and array have different dim order, array:??? tensor:???
 
             img_ndarray = img_ndarray / 255 #the reason why values in images are all 0 to 1
-
+            labels=np.unique(img_ndarray)
+        elif is_mask:
+            img_ndarray=1*img_ndarray # transform the bool to int
+            labels=np.unique(img_ndarray)
         return img_ndarray
 
     @staticmethod
@@ -58,7 +61,7 @@ class BasicDataset(Dataset):
         name = self.ids[idx]
         mask_file = list(self.masks_dir.glob(name + self.mask_suffix + '.*'))
         img_file = list(self.images_dir.glob(name + '.*'))
-        print("The file name is ")
+        # print("The file name is ")
         assert len(img_file) == 1, f'Either no image or multiple images found for the ID {name}: {img_file}'
         assert len(mask_file) == 1, f'Either no mask or multiple masks found for the ID {name}: {mask_file}'
         mask = self.load(mask_file[0])
