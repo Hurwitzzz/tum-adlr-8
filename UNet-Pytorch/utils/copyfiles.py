@@ -23,7 +23,6 @@ def CopyAndMultiply(source_folder, destination_folder, Mul):
 
 
 # To generate reduced dataset:
-# 1. Reduced Mask
 def ReduceData(source_folder, dst_folder, num):
     list_of_files = sorted( filter( lambda x: os.path.isfile(os.path.join(source_folder, x)),
                         os.listdir(source_folder) ) )
@@ -37,8 +36,10 @@ def ReduceData(source_folder, dst_folder, num):
 
 source_mask= r"/home/hewei/TUM/ADLR/tum-adlr-8/UNet-Pytorch/data/truemask/02691156/"
 dst_mask=r"/home/hewei/TUM/ADLR/tum-adlr-8/UNet-Pytorch/data/Mask_reduced/02691156/"
+
 source_sampled= r"/home/hewei/TUM/ADLR/tum-adlr-8/UNet-Pytorch/data/sampled/02691156/"
 dst_sampled=r"/home/hewei/TUM/ADLR/tum-adlr-8/UNet-Pytorch/data/Sampled_reduced/02691156/"
+
 num=1000
 ReduceData(source_mask,dst_mask,num)
 ReduceData(source_sampled,dst_sampled,num)
