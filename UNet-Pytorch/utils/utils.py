@@ -41,3 +41,32 @@ def plot_example_imgs_from_dataset(dataset,num_example_imgs):
         # if i == 0:
         #     plt.title("Mask image")
     plt.show()
+
+#img/mask/truth is [num,H,W] array
+def plot_img_predictedmask_and_truth(img,mask,truth):
+    if img.shape[0]!=mask.shape[0]:
+        return "The 1st dimension of img and mask should be same"
+    else:
+        num=img.shape[0]
+        plt.figure(figsize=(30, 10 * num))
+        for i in range(num):
+            # sampled imgs
+            plt.subplot(num, 3, i * 3 + 1)
+            plt.imshow(img[i])
+            plt.axis('off')
+            if i == 0:
+                plt.title("Sampled image")
+            
+            # predicted mask
+            plt.subplot(num, 3, i * 3 + 2)
+            plt.imshow(mask[i])
+            plt.axis('off')
+            if i == 0:
+                plt.title("Predicted mask")
+            # ground truth mask
+            plt.subplot(num, 3, i * 3 + 3)
+            plt.imshow(truth[i])
+            plt.axis('off')
+            if i == 0:
+                plt.title("Ground truth mask")
+        plt.show()

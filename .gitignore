@@ -1,1 +1,3 @@
 /home/hewei/TUM/ADLR/tum-adlr-8/UNet-Pytorch/data/*
+/home/hewei/TUM/ADLR/tum-adlr-8/UNet-Pytorch/wandb/*
+/home/hewei/TUM/ADLR/tum-adlr-8/UNet-Pytorch/checkpoints/*

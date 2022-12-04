@@ -37,7 +37,7 @@ class BasicDataset(Dataset):
             if img_ndarray.ndim == 2:
                 img_ndarray = img_ndarray[np.newaxis, ...]
             else:
-                img_ndarray = img_ndarray.transpose((2, 0, 1)) #tensor and array have different dim order, array:??? tensor:???
+                img_ndarray = img_ndarray.transpose((2, 0, 1)) 
 
             img_ndarray = img_ndarray / 255 #the reason why values in images are all 0 to 1
             labels=np.unique(img_ndarray)
