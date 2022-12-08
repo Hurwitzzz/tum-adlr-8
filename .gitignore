@@ -1,3 +1,7 @@
+<<<<<<< HEAD
 UNet-Pytorch/data/*
 UNet-Pytorch/wandb/*
 UNet-Pytorch/checkpoints/*
+=======
+/home/hewei/TUM/ADLR/tum-adlr-8/UNet-Pytorch/data/*
+>>>>>>> 3f3aa2c1076536f4f700af99a47fbea39a25d094

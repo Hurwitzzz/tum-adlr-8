@@ -17,10 +17,17 @@ from evaluate import evaluate
 from unet import UNet
 from utils.utils import plot_example_imgs_from_dataset
 
+<<<<<<< HEAD
 dir_img = Path('./data/Sampled_reduced/02691156/')
 dir_mask = Path('./data/Mask_reduced/02691156/')
 dir_checkpoint = Path('./checkpoints/')
 test_set=None
+=======
+dir_img = Path('./data/sampled/02691156/')
+dir_mask = Path('./data/truemask/02691156/')
+dir_checkpoint = Path('./checkpoints/')
+
+>>>>>>> 3f3aa2c1076536f4f700af99a47fbea39a25d094
 
 def train_net(net,
               device,
@@ -46,7 +53,11 @@ def train_net(net,
     train_set, val_set, test_set = random_split(dataset, [n_train, n_val,n_test], generator=torch.Generator().manual_seed(0))
 
     #2.1 have a look at the example imgs
+<<<<<<< HEAD
     plot_example_imgs_from_dataset(train_set,4)
+=======
+    # plot_example_imgs_from_dataset(train_set,4)
+>>>>>>> 3f3aa2c1076536f4f700af99a47fbea39a25d094
     
     
     
