@@ -37,11 +37,7 @@ class BasicDataset(Dataset):
             if img_ndarray.ndim == 2:
                 img_ndarray = img_ndarray[np.newaxis, ...]
             else:
-<<<<<<< HEAD
                 img_ndarray = img_ndarray.transpose((2, 0, 1)) 
-=======
-                img_ndarray = img_ndarray.transpose((2, 0, 1)) #tensor and array have different dim order, array:??? tensor:???
->>>>>>> 3f3aa2c1076536f4f700af99a47fbea39a25d094
 
             img_ndarray = img_ndarray / 255 #the reason why values in images are all 0 to 1
             labels=np.unique(img_ndarray)
@@ -63,8 +59,10 @@ class BasicDataset(Dataset):
 
     def __getitem__(self, idx):
         name = self.ids[idx]
-        mask_file = list(self.masks_dir.glob(name + self.mask_suffix + '.*'))
         img_file = list(self.images_dir.glob(name + '.*'))
+        _, mask_name = name.split("_", maxsplit=2)
+
+        mask_file = list(self.masks_dir.glob(mask_name + self.mask_suffix + '.*'))
         # print("The file name is ")
         assert len(img_file) == 1, f'Either no image or multiple images found for the ID {name}: {img_file}'
         assert len(mask_file) == 1, f'Either no mask or multiple masks found for the ID {name}: {mask_file}'

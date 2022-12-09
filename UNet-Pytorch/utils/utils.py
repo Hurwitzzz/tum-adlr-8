@@ -40,7 +40,6 @@ def plot_example_imgs_from_dataset(dataset,num_example_imgs):
         # plt.axis('off')
         # if i == 0:
         #     plt.title("Mask image")
-<<<<<<< HEAD
     plt.show()
 
 #img/mask/truth is [num,H,W] array
@@ -71,6 +70,3 @@ def plot_img_predictedmask_and_truth(img,mask,truth):
             if i == 0:
                 plt.title("Ground truth mask")
         plt.show()
-=======
-    plt.show()
->>>>>>> 3f3aa2c1076536f4f700af99a47fbea39a25d094
