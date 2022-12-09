@@ -52,7 +52,7 @@ def train_net(net,
     eval_for_n = 100
     
     # 3. Create data loaders
-    loader_args = dict(batch_size=batch_size, num_workers=4, pin_memory=True)
+    loader_args = dict(batch_size=batch_size, num_workers=1, pin_memory=True)
     train_loader = DataLoader(train_set, shuffle=True, **loader_args)
     val_loader = DataLoader(val_set, shuffle=False, drop_last=True, **loader_args)
     test_loader=DataLoader(test_set, shuffle=False, drop_last=True, **loader_args)
