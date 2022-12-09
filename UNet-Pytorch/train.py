@@ -49,6 +49,7 @@ def train_net(net,
     # plot_example_imgs_from_dataset(train_set,4)
     
     
+    eval_for_n = 100
     
     # 3. Create data loaders
     loader_args = dict(batch_size=batch_size, num_workers=4, pin_memory=True)
@@ -124,33 +125,31 @@ def train_net(net,
                 pbar.set_postfix(**{'loss (batch)': loss.item()})
 
                 # Evaluation round
-                division_step = (n_train // (2000 * batch_size))
-                if division_step > 0:
-                    if global_step % division_step == 0:
-                        histograms = {}
-                        for tag, value in net.named_parameters():
-                            tag = tag.replace('/', '.')
-                            if not torch.isinf(value).any():
-                                histograms['Weights/' + tag] = wandb.Histogram(value.data.cpu())
-                            if not torch.isinf(value.grad).any():
-                                histograms['Gradients/' + tag] = wandb.Histogram(value.grad.data.cpu())
+                if (global_step % eval_for_n) == 0:
+                    histograms = {}
+                    for tag, value in net.named_parameters():
+                        tag = tag.replace('/', '.')
+                        if not torch.isinf(value).any():
+                            histograms['Weights/' + tag] = wandb.Histogram(value.data.cpu())
+                        if not torch.isinf(value.grad).any():
+                            histograms['Gradients/' + tag] = wandb.Histogram(value.grad.data.cpu())
 
-                        val_score = evaluate(net, val_loader, device)
-                        scheduler.step(val_score)
+                    val_score = evaluate(net, val_loader, device)
+                    scheduler.step(val_score)
 
-                        logging.info('Validation Dice score: {}'.format(val_score))
-                        experiment.log({
-                            'learning rate': optimizer.param_groups[0]['lr'],
-                            'validation Dice': val_score,
-                            'images': wandb.Image(images[0].cpu()),
-                            'masks': {
-                                'true': wandb.Image(true_masks[0].float().cpu()),
-                                'pred': wandb.Image(masks_pred.argmax(dim=1)[0].float().cpu()),
-                            },
-                            'step': global_step,
-                            'epoch': epoch,
-                            **histograms
-                        })
+                    logging.info('Validation Dice score: {}'.format(val_score))
+                    experiment.log({
+                        'learning rate': optimizer.param_groups[0]['lr'],
+                        'validation Dice': val_score,
+                        'images': wandb.Image(images[0].cpu()),
+                        'masks': {
+                            'true': wandb.Image(true_masks[0].float().cpu()),
+                            'pred': wandb.Image(masks_pred.argmax(dim=1)[0].float().cpu()),
+                        },
+                        'step': global_step,
+                        'epoch': epoch,
+                        **histograms
+                    })
 
         if save_checkpoint:
             Path(dir_checkpoint).mkdir(parents=True, exist_ok=True)
@@ -161,7 +160,7 @@ def train_net(net,
 def get_args():
     parser = argparse.ArgumentParser(description='Train the UNet on images and target masks')
     parser.add_argument('--epochs', '-e', metavar='E', type=int, default=2, help='Number of epochs')
-    parser.add_argument('--batch-size', '-b', dest='batch_size', metavar='B', type=int, default=3, help='Batch size') # it could be 32/64 on cloud
+    parser.add_argument('--batch-size', '-b', dest='batch_size', metavar='B', type=int, default=32, help='Batch size') # it could be 32/64 on cloud
     parser.add_argument('--learning-rate', '-l', metavar='LR', type=float, default=1e-5,
                         help='Learning rate', dest='lr')
     parser.add_argument('--load', '-f', type=str, default=False, help='Load model from a .pth file')
