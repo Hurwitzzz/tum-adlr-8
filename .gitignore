@@ -2,7 +2,9 @@ UNet-Pytorch/data/*
 UNet-Pytorch/wandb/*
 UNet-Pytorch/checkpoints/*
 /UNet-Pytorch/data/*
-/overfit_data/*
+/overfit_data/*.rar
+/overfit_data/*.png
+
 
 *.pyc
 wandb/*
