@@ -39,4 +39,4 @@ def evaluate(net, dataloader, device):
     # Fixes a potential division by zero error
     if num_val_batches == 0:
         return dice_score
-    return dice_score / num_val_batches
+    return dice_score / num_val_batches, (image, mask_pred, mask_true)

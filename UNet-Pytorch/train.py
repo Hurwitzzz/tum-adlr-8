@@ -17,7 +17,10 @@ from utils.utils import plot_example_imgs_from_dataset
 
 import wandb
 
-dir_img = Path('./overfit_data/sampled/02691156/')
+train_dir_img = Path('./overfit_data/sampled/train/02691156/')
+test_dir_img = Path('./overfit_data/sampled/test/02691156/')
+val_dir_img = Path('./overfit_data/sampled/val/02691156/')
+
 dir_mask = Path('./overfit_data/mask/02691156/')
 dir_checkpoint = Path('./checkpoints/')
 test_set=None
@@ -34,25 +37,25 @@ def train_net(net,
               amp: bool = False):
     # 1. Create dataset
     try:
-        dataset = CarvanaDataset(dir_img, dir_mask, img_scale)
+        train_set = CarvanaDataset(train_dir_img, dir_mask, img_scale)
+        test_set = CarvanaDataset(test_dir_img, dir_mask, img_scale)
+        val_set = CarvanaDataset(val_dir_img, dir_mask, img_scale)
     except (AssertionError, RuntimeError):
         dataset = BasicDataset(dir_img, dir_mask, img_scale)
 
     # 2. Split into train / validation partitions
-    n_val = int(len(dataset) * val_percent)
-    n_test = int(len(dataset) * test_percent)
-    n_train = len(dataset) - n_val-n_test
+    n_val = len(val_set)
+    n_test = len(test_set)
+    n_train = len(train_set)
     
-    train_set, val_set, test_set = random_split(dataset, [n_train, n_val,n_test], generator=torch.Generator().manual_seed(0))
-
     #2.1 have a look at the example imgs
     # plot_example_imgs_from_dataset(train_set,4)
     
     
-    eval_for_n = 100
+    eval_for_n = 500
     
     # 3. Create data loaders
-    loader_args = dict(batch_size=batch_size, num_workers=1, pin_memory=True)
+    loader_args = dict(batch_size=batch_size, num_workers=4, pin_memory=True)
     train_loader = DataLoader(train_set, shuffle=True, **loader_args)
     val_loader = DataLoader(val_set, shuffle=False, drop_last=True, **loader_args)
     test_loader=DataLoader(test_set, shuffle=False, drop_last=True, **loader_args)
@@ -134,18 +137,27 @@ def train_net(net,
                         if not torch.isinf(value.grad).any():
                             histograms['Gradients/' + tag] = wandb.Histogram(value.grad.data.cpu())
 
-                    val_score = evaluate(net, val_loader, device)
+                    val_score, (val_image, val_mask_pred, val_mask_true) = evaluate(net, val_loader, device)
+                    train_score, (_, _, _) = evaluate(net, train_loader, device)
                     scheduler.step(val_score)
 
+                    
+                    
                     logging.info('Validation Dice score: {}'.format(val_score))
                     experiment.log({
                         'learning rate': optimizer.param_groups[0]['lr'],
                         'validation Dice': val_score,
-                        'images': wandb.Image(images[0].cpu()),
-                        'masks': {
+                        'train Dice': train_score,
+                        'train_images': wandb.Image(images[0].cpu()),
+                        'train_masks': {
                             'true': wandb.Image(true_masks[0].float().cpu()),
                             'pred': wandb.Image(masks_pred.argmax(dim=1)[0].float().cpu()),
                         },
+                        "val_images": wandb.Image(val_image[0].cpu()),
+                        "val_masks": {
+                            'true': wandb.Image(val_mask_true[0].float().cpu()),
+                            'pred': wandb.Image(val_mask_pred.argmax(dim=1)[0].float().cpu()),
+                        }
                         'step': global_step,
                         'epoch': epoch,
                         **histograms
