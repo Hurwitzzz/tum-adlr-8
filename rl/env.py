@@ -16,24 +16,37 @@ class Tactile2DEnv(gym.Env):
         # Define action and observation space
         # They must be gym.spaces objects
         # (x,y) and x_pos, y_pos
-        self.action_space = spaces.Box(low=np.array([-1, -1, -1, -1]), high=np.array([1, 1, 1, 1]), dtype=np.float32)
+        self.action_space = spaces.Box(
+            low=np.array([-0.5, -0.5, -0.5, -0.5]), high=np.array([0.5, 0.5, 0.5, 0.5]), dtype=np.float32
+        )
         self.dataloader = dataloader
-        self.image = torch.zeros((1, 100, 100))
+        self.image = None
+        self.expected = None
         self.iter = 0
-        self.expected = next(dataloader)
+
         self.loss_fn = loss_fn
 
         # Example for using image as input (channel-first; channel-last also works):
         self.observation_space = spaces.Box(low=0, high=255, shape=(1, 100, 100), dtype=np.uint8)
-
         self.model = recons_model
 
     def step(self, action):
 
         x_dir, y_dir, x_pos, y_pos = action
+        x_pos += 0.5
+        y_pos += 0.5
+        x_dir += 0.5
+        y_dir += 0.5
 
-        x_pos = int((x_pos + 1) * 100)
-        y_pos = int((y_pos + 1) * 100)
+        if abs(x_pos - 0.5) > abs(y_pos - 0.5):
+            x_pos = round(x_pos)
+        else:
+            y_pos = round(y_pos)
+
+        x_pos = int(x_pos * 99)
+        y_pos = int(y_pos * 99)
+
+        print(x_pos, y_pos)
 
         next_x, next_y = self._ray_cast(x_dir, y_dir, x_pos, y_pos)
         self.image[0, next_x, next_y] = 1
@@ -60,8 +73,12 @@ class Tactile2DEnv(gym.Env):
         """
         # starting point should be on the frame
         assert 0 in [x_pos, y_pos] or 99 in [x_pos, y_pos]
+        self.iter += 1
+        img = self.expected[0]
 
-        img = self.expected
+        if not x_dir and not y_dir:
+            x_dir = 1
+            y_dir = 1
 
         norm = np.linalg.norm(np.array([x_dir, y_dir]), ord=2)
         x_dir /= norm
@@ -70,31 +87,28 @@ class Tactile2DEnv(gym.Env):
         x_pos_end = x_pos
         y_pos_end = y_pos
         if 0 in [x_pos, y_pos]:
-            while x_pos_end <= 99 and y_pos_end <= 99:
+            while x_pos_end < 99 and y_pos_end < 99:
                 x_pos_end += x_dir
                 y_pos_end += y_dir
 
             x_pos_end, y_pos_end = int(x_pos_end), int(y_pos_end)
-
             rr, cc, _ = line_aa(x_pos, y_pos, x_pos_end, y_pos_end)
         else:
-            while x_pos_end >= 0 and y_pos_end >= 0:
+            while x_pos_end > 0 and y_pos_end > 0:
                 x_pos_end -= x_dir
                 y_pos_end -= y_dir
 
             x_pos_end, y_pos_end = int(x_pos_end), int(y_pos_end)
-
             rr, cc, _ = line_aa(x_pos_end, y_pos_end, x_pos, y_pos)
 
         masked = np.zeros_like(img)
         masked[rr, cc] = 1
 
         masked = np.logical_and(img, masked)
-
         indices = np.argwhere(masked)
-        n_min = np.argmin(np.linalg.norm(indices - np.array([[x_pos, y_pos]]), ord=2, axis=1))
+        n_min = np.argmin(np.linalg.norm(indices - np.array([[x_pos], [y_pos]]), ord=2, axis=0))
 
-        return indices[n_min]
+        return indices[:, n_min]
 
     def reset(self):
         self.image = torch.zeros((1, 100, 100), dtype=torch.uint8)
@@ -111,9 +125,9 @@ class Tactile2DEnv(gym.Env):
 
 
 if __name__ == "__main__":
-    model = lambda x: torch.ones((1, 100, 100))
-    dataloader = iter([torch.zeros((1, 100, 100)), torch.ones((1, 100, 100))])
-    loss_fn = lambda x, y: 1
+    model = lambda x: torch.randint(0,255,(1, 100, 100), dtype=torch.uint8)
+    dataloader = iter([torch.randint(0, 255, (1, 100, 100)), torch.randint(0, 255, (1, 100, 100))])
+    loss_fn = lambda x, y: torch.randn((1,))
 
     env = Tactile2DEnv(model, dataloader, loss_fn)
     # Define and Train the agent
