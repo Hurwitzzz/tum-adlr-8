@@ -34,8 +34,8 @@ for image in tmask:
 
 for image in vmask:
     for im in images_dir.glob("*" + image.name):
-        shutil.move(str(im), str(train_path))
+        shutil.move(str(im), str(val_path))
 
 for image in temask:
     for im in images_dir.glob("*" + image.name):
-        shutil.move(str(im), str(train_path))
+        shutil.move(str(im), str(test_path))
