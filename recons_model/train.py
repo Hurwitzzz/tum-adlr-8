@@ -15,11 +15,11 @@ from recons_model.unet import UNet
 from recons_model.utils.data_loading import Tactile2dDataset
 from recons_model.utils.dice_score import dice_loss
 
-train_dir_img = Path("./recons_model/overfit_data/sampled/train/02691156/")
-test_dir_img = Path("./recons_model/overfit_data/sampled/test/02691156/")
-val_dir_img = Path("./recons_model/overfit_data/sampled/val/02691156/")
+train_dir_img = Path("./overfit_data/sampled/train/02691156/")
+test_dir_img = Path("./overfit_data/sampled/test/02691156/")
+val_dir_img = Path("./overfit_data/sampled/val/02691156/")
 
-dir_mask = Path("./recons_model/overfit_data/mask/02691156/")
+dir_mask = Path("./overfit_data/mask/02691156/")
 dir_checkpoint = Path("./checkpoints/")
 test_set = None
 

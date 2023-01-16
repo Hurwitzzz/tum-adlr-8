@@ -59,7 +59,7 @@ class BasicDataset(Dataset):
     def __getitem__(self, idx):
         name = self.ids[idx]
         img_file = list(self.images_dir.glob(name + ".*"))
-        _, mask_name = name.split("_", maxsplit=2)
+        _, _, mask_name = name.split("_", maxsplit=3)
 
         mask_file = list(self.masks_dir.glob(mask_name + self.mask_suffix + ".*"))
         # print("The file name is ")

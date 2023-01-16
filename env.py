@@ -7,11 +7,97 @@ import torch
 from gym import spaces
 from skimage.draw import line_aa
 from stable_baselines3.a2c import A2C
+from stable_baselines3.common import results_plotter
+from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.results_plotter import load_results, ts2xy
 from torch.utils.data import DataLoader
 
 from recons_model.train import dir_mask, train_dir_img
 from recons_model.unet import UNet
 from recons_model.utils.data_loading import Tactile2dDataset
+
+# from recons_model.utils.dice_score import dice_loss
+
+
+def moving_average(values, window):
+    """
+    Smooth values by doing a moving average
+    :param values: (numpy array)
+    :param window: (int)
+    :return: (numpy array)
+    """
+    weights = np.repeat(1.0, window) / window
+    return np.convolve(values, weights, "valid")
+
+
+def plot_results(log_folder, title="Learning Curve"):
+    """
+    plot the results
+
+    :param log_folder: (str) the save location of the results to plot
+    :param title: (str) the title of the task to plot
+    """
+    x, y = ts2xy(load_results(log_folder), "timesteps")
+    y = moving_average(y, window=50)
+    # Truncate x
+    x = x[len(x) - len(y):]
+
+    _ = plt.figure(title)
+    plt.plot(x, y)
+    plt.xlabel("Number of Timesteps")
+    plt.ylabel("Rewards")
+    plt.title(title + " Smoothed")
+    plt.savefig("plot.png")
+
+
+class SaveOnBestTrainingRewardCallback(BaseCallback):
+    """
+    Callback for saving a model (the check is done every ``check_freq`` steps)
+    based on the training reward (in practice, we recommend using ``EvalCallback``).
+
+    :param check_freq: (int)
+    :param log_dir: (str) Path to the folder where the model will be saved.
+      It must contains the file created by the ``Monitor`` wrapper.
+    :param verbose: (int)
+    """
+
+    def __init__(self, check_freq: int, log_dir: str, verbose=1):
+        super(SaveOnBestTrainingRewardCallback, self).__init__(verbose)
+        self.check_freq = check_freq
+        self.log_dir = log_dir
+        self.save_path = os.path.join(log_dir, "best_model")
+        self.best_mean_reward = -np.inf
+
+    def _init_callback(self) -> None:
+        # Create folder if needed
+        if self.save_path is not None:
+            os.makedirs(self.save_path, exist_ok=True)
+
+    def _on_step(self) -> bool:
+        if self.n_calls % self.check_freq == 0:
+
+            # Retrieve training reward
+            x, y = ts2xy(load_results(self.log_dir), "timesteps")
+            if len(x) > 0:
+                # Mean training reward over the last 100 episodes
+                mean_reward = np.mean(y[-100:])
+                if self.verbose > 0:
+                    print(f"Num timesteps: {self.num_timesteps}")
+                    print(
+                        f"Best mean reward: {self.best_mean_reward:.2f} -"
+                        + f" Last mean reward per episode: {mean_reward:.2f}"
+                    )
+
+                # New best model, you could save the agent here
+                if mean_reward > self.best_mean_reward:
+                    self.best_mean_reward = mean_reward
+                    # Example for saving best model
+                    if self.verbose > 0:
+                        print(f"Saving new best model to {self.save_path}.zip")
+                    self.model.save(self.save_path)
+
+        return True
 
 
 class Tactile2DEnv(gym.Env):
@@ -24,10 +110,9 @@ class Tactile2DEnv(gym.Env):
         # Define action and observation space
         # They must be gym.spaces objects
         # (x,y) and x_pos, y_pos
-        self.action_space = spaces.Box(
-            low=np.array([-0.5, -0.5, -0.5, -0.5]), high=np.array([0.5, 0.5, 0.5, 0.5]), dtype=np.float32
-        )
-        self.dataloader = dataloader
+        self.action_space = spaces.Box(low=np.array([-1, -1]), high=np.array([1, 1]), dtype=np.float32)
+        self.dataloader_ = dataloader
+        self.dataloader = iter(dataloader)
         self.image = None
         self.expected = None
         self.iter = 0
@@ -40,29 +125,50 @@ class Tactile2DEnv(gym.Env):
 
     def step(self, action):
 
-        x_dir, y_dir, x_pos, y_pos = action
-        x_pos += 0.5
-        y_pos += 0.5
-        x_dir += 0.5
-        y_dir += 0.5
+        pos, dir = action
+        pos = int((pos + 1) * 199.5)
+        dir = (dir + 1) / 2
 
-        if abs(x_pos - 0.5) > abs(y_pos - 0.5):
-            x_pos = round(x_pos)
-        else:
-            y_pos = round(y_pos)
+        if pos < 100:
+            x_pos = pos
+            y_pos = 0
+        elif 100 <= pos < 200:
+            x_pos = 99
+            y_pos = pos - 100
+        elif 200 <= pos < 300:
+            x_pos = pos - 200
+            y_pos = 99
+        elif 300 <= pos < 400:
+            x_pos = 0
+            y_pos = pos - 300
 
-        x_pos = int(x_pos * 99)
-        y_pos = int(y_pos * 99)
+        x_dir = np.cos(np.pi * dir)
+        y_dir = np.sin(np.pi * dir)
 
-        print(x_pos, y_pos)
+        # print(pos)
+        # print(x_pos, y_pos, x_dir, y_dir)
 
-        next_x, next_y = self._ray_cast(x_dir, y_dir, x_pos, y_pos)
-        self.image[0, next_x, next_y] = 1
+        try:
+            next_x, next_y = self._ray_cast(x_dir, y_dir, x_pos, y_pos)
+            self.image[0, next_x, next_y] = 255
+        except Exception as e:
+            print(str(e))
+            pass
 
-        recons = self.model(self.image)
-        reward = -self.loss_fn(recons, self.expected)
+        recons = self.model(self.image[None, ...].type(torch.float32))
 
-        done = self.iter > 100
+        loss = self.loss_fn(recons, self.expected)
+
+        # + dice_loss(
+        #     torch.functional.F.softmax(recons, dim=1).float(),
+        #     torch.functional.F.one_hot(self.expected, 2).permute(0, 3, 1, 2).float(),
+        #     multiclass=True,
+        # )
+        # print(loss.item())
+
+        reward = -loss.item() + 1
+
+        done = self.iter > 15
 
         return np.array(self.image), reward, done, {}
 
@@ -94,33 +200,44 @@ class Tactile2DEnv(gym.Env):
 
         x_pos_end = x_pos
         y_pos_end = y_pos
-        if 0 in [x_pos, y_pos]:
-            while x_pos_end < 99 and y_pos_end < 99:
-                x_pos_end += x_dir
-                y_pos_end += y_dir
+        while (x_pos_end <= 99 and y_pos_end <= 99) and (x_pos_end >= 0 and y_pos_end >= 0):
+            x_pos_end += x_dir
+            y_pos_end += y_dir
+            # print(x_pos_end, y_pos_end)
 
-            x_pos_end, y_pos_end = int(x_pos_end), int(y_pos_end)
-            rr, cc, _ = line_aa(x_pos, y_pos, x_pos_end, y_pos_end)
-        else:
-            while x_pos_end > 0 and y_pos_end > 0:
-                x_pos_end -= x_dir
-                y_pos_end -= y_dir
+        x_pos_end, y_pos_end = int(x_pos_end), int(y_pos_end)
 
-            x_pos_end, y_pos_end = int(x_pos_end), int(y_pos_end)
-            rr, cc, _ = line_aa(x_pos_end, y_pos_end, x_pos, y_pos)
+        # print(x_pos, y_pos, x_pos_end, y_pos_end)
+
+        rr, cc, _ = line_aa(x_pos, y_pos, x_pos_end, y_pos_end)
 
         masked = np.zeros_like(img)
         masked[rr, cc] = 1
 
+        # plt.imshow(img)
+        # plt.savefig("1.png")
+
+        # plt.imshow(masked)
+        # plt.savefig("2.png")
+
         masked = np.logical_and(img, masked)
+
+        # plt.imshow(masked)
+        # plt.savefig("3.png")
+        # raise "er"
+
         indices = np.argwhere(masked)
-        n_min = np.argmin(np.linalg.norm(indices - np.array([[x_pos], [y_pos]]), ord=2, axis=0))
+        if len(indices) > 0:
+            n_min = np.argmin(np.linalg.norm(indices - np.array([[x_pos], [y_pos]]), ord=2, axis=0))
+        else:
+            raise BaseException("No intersection")
 
         return indices[:, n_min]
 
     def reset(self):
         self.image = torch.zeros((1, 100, 100), dtype=torch.uint8)
-        self.expected = next(self.dataloader)
+        batch = next(self.dataloader)
+        self.expected = batch["mask"]
         self.iter = 0
 
         return np.array(self.image)
@@ -134,23 +251,27 @@ class Tactile2DEnv(gym.Env):
 
 if __name__ == "__main__":
     model = UNet(n_channels=1, n_classes=2, bilinear=False)
-    # model.load_state_dict(torch.load(open("ckpt")))
-    
-    batch_size = 4
+    model.load_state_dict(torch.load("./checkpoints/INTERRUPTED.pth"))
+
+    # Create log dir
+    log_dir = "/tmp/gym/"
+    os.makedirs(log_dir, exist_ok=True)
+
+    # Logs will be saved in log_dir/monitor.csv
+    batch_size = 1
     train_set = Tactile2dDataset(train_dir_img, dir_mask, 1.0)
     loader_args = dict(batch_size=batch_size, num_workers=4, pin_memory=True)
     train_loader = DataLoader(train_set, shuffle=True, **loader_args)
 
-    for data in train_loader:
-        plt.imshow(np.array(data))
-        plt.imsave("1.png")
-        break
+    loss_fn = torch.nn.CrossEntropyLoss()
 
-    exit()
-
-    dataloader = iter([torch.randint(0, 255, (1, 100, 100)), torch.randint(0, 255, (1, 100, 100))])
-    loss_fn = lambda x, y: torch.randn((1,))
-
-    env = Tactile2DEnv(model, dataloader, loss_fn)
+    env = Tactile2DEnv(model, train_loader, loss_fn)
+    env = Monitor(env, log_dir)
     # Define and Train the agent
-    model = A2C("CnnPolicy", env).learn(total_timesteps=1000)
+
+    callback = SaveOnBestTrainingRewardCallback(check_freq=100, log_dir=log_dir)
+
+    model = A2C("CnnPolicy", env).learn(total_timesteps=1000, callback=callback)
+
+    results_plotter.plot_results([log_dir], 1000, results_plotter.X_TIMESTEPS, "Tactile")
+    plot_results(log_dir)
