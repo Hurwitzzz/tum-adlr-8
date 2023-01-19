@@ -16,6 +16,7 @@ from torch.utils.data import DataLoader
 from recons_model.train import dir_mask, train_dir_img
 from recons_model.unet import UNet
 from recons_model.utils.data_loading import Tactile2dDataset
+from recons_model.utils.dice_score import dice_loss
 
 # from recons_model.utils.dice_score import dice_loss
 
@@ -113,6 +114,7 @@ class Tactile2DEnv(gym.Env):
         self.action_space = spaces.Box(low=np.array([-1, -1]), high=np.array([1, 1]), dtype=np.float32)
         self.dataloader_ = dataloader
         self.dataloader = iter(dataloader)
+        # self.expected = next(self.dataloader)["mask"]
         self.image = None
         self.expected = None
         self.iter = 0
@@ -127,7 +129,7 @@ class Tactile2DEnv(gym.Env):
 
         pos, dir = action
         pos = int((pos + 1) * 199.5)
-        dir = (dir + 1) / 2
+        dir = dir + 1
 
         if pos < 100:
             x_pos = pos
@@ -147,17 +149,20 @@ class Tactile2DEnv(gym.Env):
 
         # print(pos)
         # print(x_pos, y_pos, x_dir, y_dir)
-
+        skip = False
         try:
             next_x, next_y = self._ray_cast(x_dir, y_dir, x_pos, y_pos)
             self.image[0, next_x, next_y] = 255
-        except Exception as e:
-            print(str(e))
-            pass
+        except BaseException:
+            skip = True
 
         recons = self.model(self.image[None, ...].type(torch.float32))
-
-        loss = self.loss_fn(recons, self.expected)
+        loss = self.loss_fn(recons, self.expected) + dice_loss(
+            torch.softmax(recons, dim=1).float(),
+            torch.functional.F.one_hot(self.expected, model.n_classes).permute(0, 3, 1, 2).float(),
+            multiclass=True,
+        )
+        reward = -loss.item() + (1 if not skip else 0)
 
         # + dice_loss(
         #     torch.functional.F.softmax(recons, dim=1).float(),
@@ -166,11 +171,10 @@ class Tactile2DEnv(gym.Env):
         # )
         # print(loss.item())
 
-        reward = -loss.item() + 1
-
+        self.iter += 1
         done = self.iter > 15
 
-        return np.array(self.image), reward, done, {}
+        return np.array(self.image, dtype=np.uint8), reward, done, {}
 
     def _ray_cast(self, x_dir, y_dir, x_pos, y_pos):
         """Using given starting position on the frame, and also the vector direction given
@@ -187,7 +191,7 @@ class Tactile2DEnv(gym.Env):
         """
         # starting point should be on the frame
         assert 0 in [x_pos, y_pos] or 99 in [x_pos, y_pos]
-        self.iter += 1
+
         img = self.expected[0]
 
         if not x_dir and not y_dir:
@@ -205,42 +209,46 @@ class Tactile2DEnv(gym.Env):
             y_pos_end += y_dir
             # print(x_pos_end, y_pos_end)
 
-        x_pos_end, y_pos_end = int(x_pos_end), int(y_pos_end)
+        x_pos_end = np.clip(int(x_pos_end), a_min=0, a_max=99, dtype=int)
+        y_pos_end = np.clip(int(y_pos_end), a_min=0, a_max=99, dtype=int)
 
         # print(x_pos, y_pos, x_pos_end, y_pos_end)
 
         rr, cc, _ = line_aa(x_pos, y_pos, x_pos_end, y_pos_end)
+        masked_ = np.zeros_like(img)
+        masked_[rr, cc] = 1
 
-        masked = np.zeros_like(img)
-        masked[rr, cc] = 1
-
-        # plt.imshow(img)
-        # plt.savefig("1.png")
-
-        # plt.imshow(masked)
-        # plt.savefig("2.png")
-
-        masked = np.logical_and(img, masked)
-
-        # plt.imshow(masked)
-        # plt.savefig("3.png")
-        # raise "er"
+        masked = np.logical_and(img, masked_)
 
         indices = np.argwhere(masked)
-        if len(indices) > 0:
+        if indices.shape[1] > 0:
             n_min = np.argmin(np.linalg.norm(indices - np.array([[x_pos], [y_pos]]), ord=2, axis=0))
+            """plt.imshow(img)
+            plt.savefig("1.png")
+
+            plt.imshow(masked_)
+            plt.savefig("2.png")
+
+            plt.imshow(masked)
+            plt.savefig("3.png")
+            raise "er"""
+
         else:
-            raise BaseException("No intersection")
+            raise BaseException()
 
         return indices[:, n_min]
 
     def reset(self):
         self.image = torch.zeros((1, 100, 100), dtype=torch.uint8)
-        batch = next(self.dataloader)
-        self.expected = batch["mask"]
+        try:
+            batch = next(self.dataloader)
+        except Exception:
+            self.dataloader = iter(self.dataloader_)
+            batch = next(self.dataloader)
+        self.expected = batch["mask"].to(dtype=torch.long)
         self.iter = 0
 
-        return np.array(self.image)
+        return np.array(self.image, dtype=np.uint8)
 
     def render(self, mode="human", close=False):
         pass
@@ -251,7 +259,7 @@ class Tactile2DEnv(gym.Env):
 
 if __name__ == "__main__":
     model = UNet(n_channels=1, n_classes=2, bilinear=False)
-    model.load_state_dict(torch.load("./checkpoints/INTERRUPTED.pth"))
+    model.load_state_dict(torch.load("./checkpoints/INTERRUPTED.pth", map_location=torch.device("cpu")))
 
     # Create log dir
     log_dir = "/tmp/gym/"
@@ -269,9 +277,11 @@ if __name__ == "__main__":
     env = Monitor(env, log_dir)
     # Define and Train the agent
 
-    callback = SaveOnBestTrainingRewardCallback(check_freq=100, log_dir=log_dir)
+    callback = SaveOnBestTrainingRewardCallback(check_freq=1000, log_dir=log_dir)
 
-    model = A2C("CnnPolicy", env).learn(total_timesteps=1000, callback=callback)
+    model = A2C("CnnPolicy", env, n_steps=15 * 32, learning_rate=1e-3, seed=0).learn(
+        total_timesteps=50000, callback=callback
+    )
 
-    results_plotter.plot_results([log_dir], 1000, results_plotter.X_TIMESTEPS, "Tactile")
+    results_plotter.plot_results([log_dir], 50000, results_plotter.X_TIMESTEPS, "Tactile")
     plot_results(log_dir)
