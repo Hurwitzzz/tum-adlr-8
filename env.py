@@ -8,14 +8,14 @@ from gym import spaces
 from stable_baselines3.a2c import A2C
 from stable_baselines3.common import results_plotter
 from stable_baselines3.common.callbacks import BaseCallback
-from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.results_plotter import load_results, ts2xy
 from torch.utils.data import DataLoader
 
 from recons_model.train import dir_mask, train_dir_img
 from recons_model.unet import UNet
 from recons_model.utils.data_loading import Tactile2dDataset
-from recons_model.utils.dice_score import dice_loss
+from recons_model.utils.dice_score import multiclass_dice_coeff
 
 # from recons_model.utils.dice_score import dice_loss
 
@@ -110,7 +110,9 @@ class Tactile2DEnv(gym.Env):
         # Define action and observation space
         # They must be gym.spaces objects
         # (x,y) and x_pos, y_pos
-        self.action_space = spaces.Box(low=np.array([-1, -1]), high=np.array([1, 1]), dtype=np.float32)
+        self.action_space = spaces.Box(
+            low=np.array([-1, -np.pi], dtype=np.float32), high=np.array([1, np.pi], dtype=np.float32), dtype=np.float32
+        )
         self.dataloader_ = dataloader
         self.dataloader = iter(dataloader)
         self.device = device
@@ -118,18 +120,18 @@ class Tactile2DEnv(gym.Env):
         self.image = None
         self.expected = None
         self.iter = 0
+        self.global_iter = 0
 
         self.loss_fn = loss_fn
 
         # Example for using image as input (channel-first; channel-last also works):
-        self.observation_space = spaces.Box(low=0, high=255, shape=(1, 100, 100), dtype=np.uint8)
+        self.observation_space = spaces.Box(low=0, high=255, shape=(2, 100, 100), dtype=np.uint8)
         self.model = recons_model
 
     def step(self, action):
 
         pos, dir = action
         pos = int((pos + 1) * 199.5)
-        dir = dir + 1
 
         if pos < 100:
             x_pos = pos
@@ -144,23 +146,43 @@ class Tactile2DEnv(gym.Env):
             x_pos = 0
             y_pos = pos - 300
 
-        x_dir = np.cos(np.pi * dir)
-        y_dir = np.sin(np.pi * dir)
+        x_dir = np.cos(dir)
+        y_dir = np.sin(dir)
 
         # print(pos)
         # print(x_pos, y_pos, x_dir, y_dir)
         next_x, next_y = self._ray_cast(x_dir, y_dir, x_pos, y_pos)
-
-        if next_x != -1 and next_y != -1:
+        reward = 0
+        if next_x != -1 and next_y != -1 and self.image[0, next_x, next_y] != 1:
             self.image[0, next_x, next_y] = 1
+            reward = 1
+        else:
+            pass
+            # self.reward = np.clip(self.reward - 1, a_min=0, a_max=np.inf)
 
-        recons = self.model(self.image[None, ...].to(device=self.device, dtype=torch.float32))
-        loss = self.loss_fn(recons, self.expected.to(self.device)) + dice_loss(
-            torch.softmax(recons, dim=1).float(),
-            torch.functional.F.one_hot(self.expected.to(self.device), model.n_classes).permute(0, 3, 1, 2).float(),
-            multiclass=True,
+        recons = self.model(self.image[None, None, 0, ...].to(device=self.device, dtype=torch.float32))
+
+        argmax_recons = torch.argmax(recons, dim=1)
+        self.image[1, ...] = argmax_recons.detach().cpu()[0].type(torch.uint8)
+
+        mask_pred = torch.functional.F.one_hot(argmax_recons, self.model.n_classes).permute(0, 3, 1, 2).float()
+        mask_true = (
+            torch.functional.F.one_hot(self.expected.to(self.device), self.model.n_classes).permute(0, 3, 1, 2).float()
         )
-        reward = -loss.detach().cpu().item() + 1
+        # compute the Dice score, ignoring background
+        coef = multiclass_dice_coeff(mask_pred[:, 1:, ...], mask_true[:, 1:, ...], reduce_batch_first=True)
+        reward += coef.detach().cpu().item()
+        if (self.global_iter % 1000) == 0:
+            fig, axes = plt.subplots(1, 3)
+            axes[0].imshow(self.image[1])
+            axes[1].imshow(self.expected[0])
+            axes[2].imshow(self.image[0])
+            try:
+                os.mkdir("imgs")
+            except Exception:
+                pass
+            fig.savefig(f"imgs/{self.global_iter}.png")
+            plt.close()
 
         # + dice_loss(
         #     torch.functional.F.softmax(recons, dim=1).float(),
@@ -170,8 +192,15 @@ class Tactile2DEnv(gym.Env):
         # print(loss.item())
 
         self.iter += 1
+        self.global_iter += 1
         done = self.iter > 14
-        return np.array(self.image, dtype=np.uint8) * 255, reward, done, {}
+
+        return (
+            np.array(self.image, dtype=np.uint8) * 255,
+            reward,
+            done,
+            {},
+        )
 
     def _ray_cast(self, x_dir, y_dir, x_pos, y_pos):
         """Using given starting position on the frame, and also the vector direction given
@@ -203,11 +232,10 @@ class Tactile2DEnv(gym.Env):
             if img[x, y]:
                 return x, y
 
-            # print(x_pos_end, y_pos_end)
         return -1, -1
 
     def reset(self):
-        self.image = torch.zeros((1, 100, 100), dtype=torch.uint8)
+        self.image = torch.zeros((2, 100, 100), dtype=torch.uint8)
         try:
             batch = next(self.dataloader)
         except Exception:
@@ -242,15 +270,27 @@ if __name__ == "__main__":
 
     loss_fn = torch.nn.CrossEntropyLoss()
 
-    env = Tactile2DEnv(model, train_loader, loss_fn, device="mps")
-    env = Monitor(env, log_dir)
+    env = lambda: Tactile2DEnv(model, train_loader, loss_fn, device="mps")
+    env = make_vec_env(env, n_envs=1, monitor_dir=log_dir)
+    # env = Monitor(env, log_dir)
+
     # Define and Train the agent
 
-    callback = SaveOnBestTrainingRewardCallback(check_freq=1000, log_dir=log_dir)
+    callback = SaveOnBestTrainingRewardCallback(check_freq=10000, log_dir=log_dir)
 
-    model = A2C("CnnPolicy", env, n_steps=14 * 32, learning_rate=3e-4, seed=0, device="mps").learn(
-        total_timesteps=50000, callback=callback
+    model = A2C(
+        "CnnPolicy",
+        env,
+        n_steps=14 * 128,
+        use_rms_prop=False,
+        learning_rate=1e-3,
+        # batch_size=16,
+        # n_epochs=10, learning_rate=3e-4,
+        seed=0,
+        device="mps",
     )
+    # model.load("/tmp/gym/best_model.zip", env=env, device="mps")
+    model.learn(total_timesteps=500000, callback=callback)
 
-    results_plotter.plot_results([log_dir], 50000, results_plotter.X_TIMESTEPS, "Tactile")
+    results_plotter.plot_results([log_dir], 500000, results_plotter.X_TIMESTEPS, "Tactile")
     plot_results(log_dir)
