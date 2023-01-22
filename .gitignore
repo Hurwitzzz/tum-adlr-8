@@ -14,5 +14,7 @@ overfit_data/*.zip
 
 *.pyc
 wandb/*
-
+*.png
+*.pth
+*.DS_Store
 .vscode
