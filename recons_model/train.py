@@ -19,7 +19,7 @@ from utils.dice_score import dice_loss
 from utils.utils import plot_example_imgs_from_dataset
 
 
-IFTEST=True
+IFTEST=True # #Setting True to calculate the dice score of [1,14] samplings
 
 train_dir_img = Path("overfit_data/sampled/train/02691156/")
 test_dir_img = Path("overfit_data/sampled/test/02691156/")
@@ -44,7 +44,7 @@ def train_net(
     amp: bool = False,
     iftest: bool = False
 ):
-    if (iftest == False):
+    if (iftest == False ):
         # 1. Create dataset
         train_set = Tactile2dDataset(train_dir_img, dir_mask, img_scale)
         val_set = Tactile2dDataset(val_dir_img, dir_mask, img_scale)
@@ -178,8 +178,8 @@ def train_net(
                 torch.save(net.state_dict(), str(dir_checkpoint / "checkpoint_epoch{}.pth".format(epoch)))
                 logging.info(f"Checkpoint {epoch} saved!")
     
-    # Test mode
-    else:
+    # inference all the testset
+    elif False:
         test_set = Tactile2dDataset(test_dir_img, dir_mask, img_scale)
         loader_args = dict(batch_size=batch_size, num_workers=8, pin_memory=True)
         test_loader = DataLoader(test_set, shuffle=False, drop_last=True, **loader_args)
@@ -197,24 +197,7 @@ def train_net(
                 amp=amp,
             )
         )    
-        val_score, (dice_score_set,val_image_set, val_mask_pred_set, val_mask_true_set) = predict(net, test_loader, device)
-        
-        # num=8
-        # col=3
-        # for i in range(num):
-        #     plt.subplot(num,col,i*col+1)
-        #     plt.imshow(val_image[i][0].cpu())
-        #     if i==0:
-        #         plt.title("sampled points")
-        #     plt.subplot(num,col,i*col+3)
-        #     plt.imshow(val_mask_true.argmax(dim=1)[i].float().cpu())
-        #     if i==0:
-        #         plt.title("truth")
-        #     plt.subplot(num,col,i*col+2)
-        #     plt.imshow(val_mask_pred.argmax(dim=1)[i].float().cpu())
-        #     if i==0:
-        #         plt.title("prediction")       
-        # plt.show()
+        val_score, (dice_score_set,val_image_set, val_mask_pred_set, val_mask_true_set) = predict(net, test_loader, device)       
 
         logging.info("Validation Dice score: {}".format(val_score))
         for i in range(len(val_image_set)):
@@ -232,7 +215,44 @@ def train_net(
                         "step": i*batch_size+j+1,
                     }
                 )
+    elif IFTEST:
+        # (Initialize logging)
+        experiment = wandb.init(project="U-Net", resume="allow", anonymous="allow")
+        experiment.config.update(
+            dict(
+                epochs=epochs,
+                batch_size=batch_size,
+                learning_rate=learning_rate,
+                val_percent=val_percent,
+                save_checkpoint=save_checkpoint,
+                img_scale=img_scale,
+                amp=amp,
+            )
+        )
+        for num_samplings in range(1,15):
+            test_dir_img = Path(f"overfit_data/sampled/splited_test/02691156/{num_samplings}")
+            test_set = Tactile2dDataset(test_dir_img, dir_mask, img_scale)
+            loader_args = dict(batch_size=batch_size, num_workers=8, pin_memory=True)
+            test_loader = DataLoader(test_set, shuffle=False, drop_last=False, **loader_args)
 
+            val_score, (dice_score_set,val_image_set, val_mask_pred_set, val_mask_true_set) = predict(net, test_loader, device)       
+
+            logging.info(f"Validation Dice score of {num_samplings} samplings: {val_score}")
+            for i in range(len(val_image_set)):
+                for j in range(val_image_set[i].size(dim=0)): #size(dim=0) is #batch_size (but not for the last batch)
+                    experiment.log(
+                        {
+                            f"{num_samplings} samplings":{
+                                "Dice_Score": val_score,
+                                "image": wandb.Image(val_image_set[i][j][0].cpu()),
+                                "test_masks": {
+                                    "true": wandb.Image(val_mask_true_set[i].argmax(dim=1)[j].float().cpu()),
+                                    "pred": wandb.Image(val_mask_pred_set[i].argmax(dim=1)[j].float().cpu()),
+                                },
+                                "No.": i*batch_size+j+1,
+                            }
+                        }
+                    )
         
 
 def get_args():
