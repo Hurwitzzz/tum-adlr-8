@@ -2,7 +2,7 @@ import os
 import pathlib
 import shutil
 
-id = "534534543"
+id = "02691156"
 
 mask_dir = pathlib.Path(f"./mask/{id}/")
 images_dir = pathlib.Path(f"./sampled/{id}/")
