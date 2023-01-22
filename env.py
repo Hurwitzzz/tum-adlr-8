@@ -270,8 +270,12 @@ if __name__ == "__main__":
 
     loss_fn = torch.nn.CrossEntropyLoss()
 
-    env = lambda: Tactile2DEnv(model, train_loader, loss_fn, device="mps")
-    env = make_vec_env(env, n_envs=1, monitor_dir=log_dir)
+    env = make_vec_env(
+        Tactile2DEnv,
+        n_envs=4,
+        monitor_dir=log_dir,
+        env_kwargs={"recons_model": model, "dataloader": train_loader, "loss_fn": loss_fn, "device": "mps"},
+    )
     # env = Monitor(env, log_dir)
 
     # Define and Train the agent

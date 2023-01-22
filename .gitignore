@@ -8,5 +8,7 @@ UNet-Pytorch/checkpoints/*
 
 *.pyc
 wandb/*
-
+*.png
+*.pth
+*.DS_Store
 .vscode
