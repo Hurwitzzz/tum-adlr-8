@@ -2,22 +2,20 @@ import argparse
 import logging
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import wandb
 from torch import optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-import matplotlib.pyplot as plt
 
-
-from evaluate import evaluate, predict
-from unet import UNet
-from utils.data_loading import Tactile2dDataset
-from utils.dice_score import dice_loss
-from utils.utils import plot_example_imgs_from_dataset
-
+import wandb
+from recons_model.evaluate import evaluate, predict
+from recons_model.unet import UNet
+from recons_model.utils.data_loading import Tactile2dDataset
+from recons_model.utils.dice_score import dice_loss
+from recons_model.utils.utils import plot_example_imgs_from_dataset
 
 IFTEST=True # #Setting True to calculate the dice score of [1,14] samplings
 

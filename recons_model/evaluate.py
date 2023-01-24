@@ -1,10 +1,9 @@
+import matplotlib.pyplot as plt
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
-import matplotlib.pyplot as plt
 
-
-from utils.dice_score import dice_coeff, multiclass_dice_coeff
+from recons_model.utils.dice_score import dice_coeff, multiclass_dice_coeff
 
 
 def evaluate(net, dataloader, device):

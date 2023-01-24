@@ -189,9 +189,9 @@ class Tactile2DEnv(gym.Env):
             self.exp.log(
                 {
                     "obs": {
-                        "predicted_image": wandb.Image(self.image[1]),
-                        "expected_image": wandb.Image(self.expected[0]),
-                        "sample_points": wandb.Image(self.image[0]),
+                        "predicted_image": wandb.Image(self.image[1].float()),
+                        "expected_image": wandb.Image(self.expected[0].float()),
+                        "sample_points": wandb.Image(self.image[0].float()),
                     },
                     "step": self.global_iter,
                 }
@@ -271,7 +271,7 @@ if __name__ == "__main__":
     n_steps = 14 * 128
     total_timestamps = 50000
     n_env = 4
-    device = "cuda"
+    device = "mps"
     check_freq = 1000
 
     experiment = wandb.init(project="tactile experiment", resume="allow", anonymous="must")
@@ -300,7 +300,7 @@ if __name__ == "__main__":
 
     env = make_vec_env(
         Tactile2DEnv,
-        n_envs=4,
+        n_envs=n_env,
         monitor_dir=log_dir,
         env_kwargs={
             "recons_model": model,
