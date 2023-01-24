@@ -12,6 +12,7 @@ from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.results_plotter import load_results, ts2xy
 from torch.utils.data import DataLoader
 
+import wandb
 from recons_model.train import dir_mask, train_dir_img
 from recons_model.unet import UNet
 from recons_model.utils.data_loading import Tactile2dDataset
@@ -62,12 +63,13 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
     :param verbose: (int)
     """
 
-    def __init__(self, check_freq: int, log_dir: str, verbose=1):
+    def __init__(self, check_freq: int, log_dir: str, verbose=1, experiment):
         super(SaveOnBestTrainingRewardCallback, self).__init__(verbose)
         self.check_freq = check_freq
         self.log_dir = log_dir
         self.save_path = os.path.join(log_dir, "best_model")
         self.best_mean_reward = -np.inf
+        self.exp = experiment
 
     def _init_callback(self) -> None:
         # Create folder if needed
@@ -88,6 +90,14 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                         f"Best mean reward: {self.best_mean_reward:.2f} -"
                         + f" Last mean reward per episode: {mean_reward:.2f}"
                     )
+                    self.exp.log(
+                        {
+                            "num_timesteps": self.num_timesteps,
+                            "mean_reward": mean_reward,
+                            "step": self.global_Step
+                        }
+                    )
+                    
 
                 # New best model, you could save the agent here
                 if mean_reward > self.best_mean_reward:
@@ -105,11 +115,13 @@ class Tactile2DEnv(gym.Env):
 
     metadata = {"render.modes": ["human"]}
 
-    def __init__(self, recons_model, dataloader, loss_fn, device):
+    def __init__(self, recons_model, dataloader, loss_fn, device, experiment):
         super(Tactile2DEnv, self).__init__()
         # Define action and observation space
         # They must be gym.spaces objects
         # (x,y) and x_pos, y_pos
+        self.exp = experiment
+        
         self.action_space = spaces.Box(
             low=np.array([-1, -np.pi], dtype=np.float32), high=np.array([1, np.pi], dtype=np.float32), dtype=np.float32
         )
@@ -173,16 +185,14 @@ class Tactile2DEnv(gym.Env):
         coef = multiclass_dice_coeff(mask_pred[:, 1:, ...], mask_true[:, 1:, ...], reduce_batch_first=True)
         reward += coef.detach().cpu().item()
         if (self.global_iter % 1000) == 0:
-            fig, axes = plt.subplots(1, 3)
-            axes[0].imshow(self.image[1])
-            axes[1].imshow(self.expected[0])
-            axes[2].imshow(self.image[0])
-            try:
-                os.mkdir("imgs")
-            except Exception:
-                pass
-            fig.savefig(f"imgs/{self.global_iter}.png")
-            plt.close()
+            self.exp.log(
+                        {
+                            "predicted_image": self.image[1],
+                            "expected_image": self.expected[0],
+                            "sample_points": self.image[0],
+                            "step": self.global_iter
+                        }
+                    )
 
         # + dice_loss(
         #     torch.functional.F.softmax(recons, dim=1).float(),
@@ -254,9 +264,31 @@ class Tactile2DEnv(gym.Env):
 
 
 if __name__ == "__main__":
+    lr = 1e-3
+    n_steps= 14 * 128
+    total_timestamps = 50000
+    n_env = 4
+    device = "cuda"
+    check_freq = 1000
+    
+    
+    experiment = wandb.init(project="tactile experiment", resume="allow", anonymous="must")
+    experiment.config.update(
+        dict(
+            total_timestamps=total_timestamps,
+            n_steps=n_steps,
+            n_env=n_env,
+            lr=lr,
+            device=device,
+            check_freq=check_freq
+        )
+    )
+        
+    
     model = UNet(n_channels=1, n_classes=2, bilinear=False)
-    model.to("mps")
-    model.load_state_dict(torch.load("./checkpoints/INTERRUPTED.pth", map_location=torch.device("mps")))
+    
+    model.to(device)
+    model.load_state_dict(torch.load("./checkpoints/INTERRUPTED.pth", map_location=torch.device(device)))
 
     # Create log dir
     log_dir = "/tmp/gym/"
@@ -274,27 +306,27 @@ if __name__ == "__main__":
         Tactile2DEnv,
         n_envs=4,
         monitor_dir=log_dir,
-        env_kwargs={"recons_model": model, "dataloader": train_loader, "loss_fn": loss_fn, "device": "mps"},
+        env_kwargs={"recons_model": model, "dataloader": train_loader, "loss_fn": loss_fn, "device": device},
     )
     # env = Monitor(env, log_dir)
 
     # Define and Train the agent
 
-    callback = SaveOnBestTrainingRewardCallback(check_freq=10000, log_dir=log_dir)
+    callback = SaveOnBestTrainingRewardCallback(check_freq=check_freq, log_dir=log_dir, experiment=experiment)
 
     model = A2C(
         "CnnPolicy",
         env,
-        n_steps=14 * 128,
+        n_steps=n_steps,
         use_rms_prop=False,
-        learning_rate=1e-3,
+        learning_rate=lr,
         # batch_size=16,
         # n_epochs=10, learning_rate=3e-4,
         seed=0,
-        device="mps",
+        device=device,
     )
-    # model.load("/tmp/gym/best_model.zip", env=env, device="mps")
-    model.learn(total_timesteps=500000, callback=callback)
+    model.load("/tmp/gym/best_model.zip", env=env, device=device)
+    model.learn(total_timesteps=total_timestamps, callback=callback)
 
-    results_plotter.plot_results([log_dir], 500000, results_plotter.X_TIMESTEPS, "Tactile")
+    results_plotter.plot_results([log_dir], total_timestamps, results_plotter.X_TIMESTEPS, "Tactile")
     plot_results(log_dir)
