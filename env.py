@@ -63,7 +63,13 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
     :param verbose: (int)
     """
 
-    def __init__(self, check_freq: int, log_dir: str, verbose=1, experiment):
+    def __init__(
+        self,
+        check_freq: int,
+        log_dir: str,
+        experiment,
+        verbose=1,
+    ):
         super(SaveOnBestTrainingRewardCallback, self).__init__(verbose)
         self.check_freq = check_freq
         self.log_dir = log_dir
@@ -91,13 +97,8 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                         + f" Last mean reward per episode: {mean_reward:.2f}"
                     )
                     self.exp.log(
-                        {
-                            "num_timesteps": self.num_timesteps,
-                            "mean_reward": mean_reward,
-                            "step": self.global_Step
-                        }
+                        {"num_timesteps": self.num_timesteps, "mean_reward": mean_reward, "step": self.global_Step}
                     )
-                    
 
                 # New best model, you could save the agent here
                 if mean_reward > self.best_mean_reward:
@@ -121,7 +122,7 @@ class Tactile2DEnv(gym.Env):
         # They must be gym.spaces objects
         # (x,y) and x_pos, y_pos
         self.exp = experiment
-        
+
         self.action_space = spaces.Box(
             low=np.array([-1, -np.pi], dtype=np.float32), high=np.array([1, np.pi], dtype=np.float32), dtype=np.float32
         )
@@ -186,13 +187,15 @@ class Tactile2DEnv(gym.Env):
         reward += coef.detach().cpu().item()
         if (self.global_iter % 1000) == 0:
             self.exp.log(
-                        {
-                            "predicted_image": self.image[1],
-                            "expected_image": self.expected[0],
-                            "sample_points": self.image[0],
-                            "step": self.global_iter
-                        }
-                    )
+                {
+                    "obs": {
+                        "predicted_image": wandb.Image(self.image[1]),
+                        "expected_image": wandb.Image(self.expected[0]),
+                        "sample_points": wandb.Image(self.image[0]),
+                    },
+                    "step": self.global_iter,
+                }
+            )
 
         # + dice_loss(
         #     torch.functional.F.softmax(recons, dim=1).float(),
@@ -265,28 +268,21 @@ class Tactile2DEnv(gym.Env):
 
 if __name__ == "__main__":
     lr = 1e-3
-    n_steps= 14 * 128
+    n_steps = 14 * 128
     total_timestamps = 50000
     n_env = 4
     device = "cuda"
     check_freq = 1000
-    
-    
+
     experiment = wandb.init(project="tactile experiment", resume="allow", anonymous="must")
     experiment.config.update(
         dict(
-            total_timestamps=total_timestamps,
-            n_steps=n_steps,
-            n_env=n_env,
-            lr=lr,
-            device=device,
-            check_freq=check_freq
+            total_timestamps=total_timestamps, n_steps=n_steps, n_env=n_env, lr=lr, device=device, check_freq=check_freq
         )
     )
-        
-    
+
     model = UNet(n_channels=1, n_classes=2, bilinear=False)
-    
+
     model.to(device)
     model.load_state_dict(torch.load("./checkpoints/INTERRUPTED.pth", map_location=torch.device(device)))
 
@@ -306,7 +302,13 @@ if __name__ == "__main__":
         Tactile2DEnv,
         n_envs=4,
         monitor_dir=log_dir,
-        env_kwargs={"recons_model": model, "dataloader": train_loader, "loss_fn": loss_fn, "device": device},
+        env_kwargs={
+            "recons_model": model,
+            "dataloader": train_loader,
+            "loss_fn": loss_fn,
+            "device": device,
+            "experiment": experiment,
+        },
     )
     # env = Monitor(env, log_dir)
 
@@ -325,7 +327,8 @@ if __name__ == "__main__":
         seed=0,
         device=device,
     )
-    model.load("/tmp/gym/best_model.zip", env=env, device=device)
+    if os.path.exists("/tmp/gym/best_model.zip"):
+        model.load("/tmp/gym/best_model.zip", env=env, device=device)
     model.learn(total_timesteps=total_timestamps, callback=callback)
 
     results_plotter.plot_results([log_dir], total_timestamps, results_plotter.X_TIMESTEPS, "Tactile")
