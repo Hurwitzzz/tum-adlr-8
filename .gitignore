@@ -4,7 +4,13 @@ UNet-Pytorch/checkpoints/*
 /UNet-Pytorch/data/*
 /overfit_data/*.rar
 /overfit_data/*
+checkpoints/*
+overfit_data/mask
+overfit_data/outline
+overfit_data/sampled
+overfit_data/*.zip
 
+*.pth
 
 *.pyc
 wandb/*
