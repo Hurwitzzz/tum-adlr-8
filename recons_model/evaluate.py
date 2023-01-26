@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 
-from recons_model.utils.dice_score import dice_coeff, multiclass_dice_coeff
+from utils.dice_score import dice_coeff, multiclass_dice_coeff
 
 
 def evaluate(net, dataloader, device):

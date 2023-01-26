@@ -1,6 +1,7 @@
 import argparse
 import logging
 from pathlib import Path
+from datetime import datetime
 
 import matplotlib.pyplot as plt
 import torch
@@ -11,13 +12,13 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 import wandb
-from recons_model.evaluate import evaluate, predict
-from recons_model.unet import UNet
-from recons_model.utils.data_loading import Tactile2dDataset
-from recons_model.utils.dice_score import dice_loss
-from recons_model.utils.utils import plot_example_imgs_from_dataset
+from evaluate import evaluate, predict
+from unet import UNet
+from utils.data_loading import Tactile2dDataset
+from utils.dice_score import dice_loss
+from utils.utils import plot_example_imgs_from_dataset
 
-IFTEST=True # #Setting True to calculate the dice score of [1,14] samplings
+IFTEST=False # #Setting True to calculate the dice score of [1,14] samplings
 
 train_dir_img = Path("overfit_data/sampled/train/02691156/")
 test_dir_img = Path("overfit_data/sampled/test/02691156/")
@@ -52,9 +53,9 @@ def train_net(
         n_train = len(train_set)
 
         # # 2.1 have a look at the example imgs
-        plot_example_imgs_from_dataset(train_set,4)
+        # plot_example_imgs_from_dataset(train_set,4)
 
-        eval_for_n = 500
+        eval_for_n = 50
 
         # 3. Create data loaders
         loader_args = dict(batch_size=batch_size, num_workers=4, pin_memory=True)
@@ -119,12 +120,15 @@ def train_net(
 
                     with torch.cuda.amp.autocast(enabled=amp):
                         masks_pred = net(images)
-                        loss = criterion(masks_pred, true_masks) + dice_loss(
+                        CELoss=criterion(masks_pred, true_masks)
+                        DiceLoss=dice_loss(
                             F.softmax(masks_pred, dim=1).float(),
                             F.one_hot(true_masks, net.n_classes).permute(0, 3, 1, 2).float(),
                             multiclass=True,
                         )
-
+                        # loss = CELoss+DiceLoss
+                        loss = CELoss
+                        
                     optimizer.zero_grad(set_to_none=True)
                     grad_scaler.scale(loss).backward()
                     grad_scaler.step(optimizer)
@@ -152,6 +156,8 @@ def train_net(
                         logging.info("Validation Dice score: {}".format(val_score))
                         experiment.log(
                             {
+                                "Cross Entropy Loss":CELoss,
+                                "Dice Loss":DiceLoss,
                                 "learning rate": optimizer.param_groups[0]["lr"],
                                 "validation Dice": val_score,
                                 "train Dice": train_score,
@@ -213,7 +219,8 @@ def train_net(
                         "step": i*batch_size+j+1,
                     }
                 )
-    elif IFTEST:
+    # test according to the number of sampling [1,14]
+    elif IFTEST: 
         # (Initialize logging)
         experiment = wandb.init(project="U-Net", resume="allow", anonymous="allow")
         experiment.config.update(
@@ -255,7 +262,7 @@ def train_net(
 
 def get_args():
     parser = argparse.ArgumentParser(description="Train the UNet on images and target masks")
-    parser.add_argument("--epochs", "-e", metavar="E", type=int, default=2, help="Number of epochs")
+    parser.add_argument("--epochs", "-e", metavar="E", type=int, default=20, help="Number of epochs")
     parser.add_argument(
         "--batch-size", "-b", dest="batch_size", metavar="B", type=int, default=32, help="Batch size"
     )  # it could be 32/64 on cloud
@@ -275,6 +282,7 @@ def get_args():
     parser.add_argument("--amp", action="store_true", default=False, help="Use mixed precision")
     parser.add_argument("--bilinear", action="store_true", default=False, help="Use bilinear upsampling")
     parser.add_argument("--classes", "-c", type=int, default=2, help="Number of classes")
+    parser.add_argument("--iftest",type=str, default=False, help="set True to test the model on testset")
 
     return parser.parse_args()
 
@@ -320,6 +328,7 @@ if __name__ == "__main__":
             iftest=IFTEST
         )
     except KeyboardInterrupt:
-        torch.save(net.state_dict(), "INTERRUPTED.pth")
+        now=datetime.now()
+        torch.save(net.state_dict(), str(dir_checkpoint)+"/INTERRUPTED"+now.strftime("_%m_%d")+".pth")
         logging.info("Saved interrupt")
         raise
