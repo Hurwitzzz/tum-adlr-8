@@ -20,12 +20,12 @@ from utils.utils import plot_example_imgs_from_dataset
 
 IFTEST=False # #Setting True to calculate the dice score of [1,14] samplings
 
-train_dir_img = Path("overfit_data/sampled/train/02691156/")
-test_dir_img = Path("overfit_data/sampled/test/02691156/")
-val_dir_img = Path("overfit_data/sampled/val/02691156/")
+train_dir_img = Path("./overfit_data/sampled/train/02691156/")
+test_dir_img = Path("./overfit_data/sampled/test/02691156/")
+val_dir_img = Path("./overfit_data/sampled/val/02691156/")
 
-dir_mask = Path("overfit_data/mask/02691156")
-dir_checkpoint = Path("checkpoints")
+dir_mask = Path("./overfit_data/mask/02691156")
+dir_checkpoint = Path("./checkpoints")
 test_set = None
 
 
