@@ -1,15 +1,16 @@
 import os
+from typing import Callable, Union
 
 import gym
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from gym import spaces
-from stable_baselines3.a2c import A2C
 from stable_baselines3.common import results_plotter
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.results_plotter import load_results, ts2xy
+from stable_baselines3.ppo.ppo import PPO
 from torch.utils.data import DataLoader
 
 import wandb
@@ -19,6 +20,26 @@ from recons_model.utils.data_loading import Tactile2dDataset
 from recons_model.utils.dice_score import multiclass_dice_coeff
 
 # from recons_model.utils.dice_score import dice_loss
+
+
+def linear_schedule(initial_value: Union[float, str]) -> Callable[[float], float]:
+    """
+    Linear learning rate schedule.
+    :param initial_value: (float or str)
+    :return: (function)
+    """
+    # Force conversion to float
+    initial_value_ = float(initial_value)
+
+    def func(progress_remaining: float) -> float:
+        """
+        Progress will decrease from 1 (beginning) to 0
+        :param progress_remaining: (float)
+        :return: (float)
+        """
+        return progress_remaining * initial_value_
+
+    return func
 
 
 def moving_average(values, window):
@@ -173,7 +194,7 @@ class Tactile2DEnv(gym.Env):
             pass
             # self.reward = np.clip(self.reward - 1, a_min=0, a_max=np.inf)
 
-        recons = self.model(self.image[None, None, 0, ...].to(device=self.device, dtype=torch.float32))
+        """recons = self.model(self.image[None, None, 0, ...].to(device=self.device, dtype=torch.float32))
 
         argmax_recons = torch.argmax(recons, dim=1)
         self.image[1, ...] = argmax_recons.detach().cpu()[0].type(torch.uint8)
@@ -184,7 +205,7 @@ class Tactile2DEnv(gym.Env):
         )
         # compute the Dice score, ignoring background
         coef = multiclass_dice_coeff(mask_pred[:, 1:, ...], mask_true[:, 1:, ...], reduce_batch_first=True)
-        reward += coef.detach().cpu().item()
+        reward += coef.detach().cpu().item()"""
         if (self.global_iter % 1000) == 0:
             self.exp.log(
                 {
@@ -267,12 +288,12 @@ class Tactile2DEnv(gym.Env):
 
 
 if __name__ == "__main__":
-    lr = 1e-3
-    n_steps = 14 * 128
-    total_timestamps = 50000
-    n_env = 4
-    device = "mps"
-    check_freq = 1000
+    lr = 5e-4
+    n_steps = 5
+    total_timestamps = 500000
+    n_env = 8
+    device = "cuda"
+    check_freq = 10000
 
     experiment = wandb.init(project="tactile experiment", resume="allow", anonymous="must")
     experiment.config.update(
@@ -287,7 +308,7 @@ if __name__ == "__main__":
     model.load_state_dict(torch.load("./checkpoints/INTERRUPTED.pth", map_location=torch.device(device)))
 
     # Create log dir
-    log_dir = "/tmp/gym/"
+    log_dir = "./tmp/gym/"
     os.makedirs(log_dir, exist_ok=True)
 
     # Logs will be saved in log_dir/monitor.csv
@@ -316,19 +337,17 @@ if __name__ == "__main__":
 
     callback = SaveOnBestTrainingRewardCallback(check_freq=check_freq, log_dir=log_dir, experiment=experiment)
 
-    model = A2C(
+    model = PPO(
         "CnnPolicy",
         env,
         n_steps=n_steps,
         use_rms_prop=False,
-        learning_rate=lr,
+        learning_rate=linear_schedule(lr),
         # batch_size=16,
         # n_epochs=10, learning_rate=3e-4,
         seed=0,
         device=device,
-    )
-    if os.path.exists("/tmp/gym/best_model.zip"):
-        model.load("/tmp/gym/best_model.zip", env=env, device=device)
+        )
     model.learn(total_timesteps=total_timestamps, callback=callback)
 
     results_plotter.plot_results([log_dir], total_timestamps, results_plotter.X_TIMESTEPS, "Tactile")
