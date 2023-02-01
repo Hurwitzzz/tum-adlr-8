@@ -9,6 +9,7 @@ overfit_data/mask
 overfit_data/outline
 overfit_data/sampled
 overfit_data/*.zip
+recons_model/wandb/
 
 *.pth
 
