@@ -17,6 +17,7 @@ from unet import UNet
 from utils.data_loading import Tactile2dDataset
 from utils.dice_score import dice_loss
 from utils.utils import plot_example_imgs_from_dataset
+from utils.utils import EnlargePointsForVisualization
 
 IFTEST=False # #Setting True to calculate the dice score of [1,14] samplings
 
@@ -26,6 +27,15 @@ val_dir_img = Path("../overfit_data/sampled/val/02691156/")
 
 dir_mask = Path("../overfit_data/mask/02691156")
 dir_checkpoint = Path("../checkpoints")
+
+# # For debugging on local computer
+# train_dir_img = Path("overfit_data/sampled/train/02691156/")
+# test_dir_img = Path("overfit_data/sampled/test/02691156/")
+# val_dir_img = Path("overfit_data/sampled/val/02691156/")
+
+# dir_mask = Path("overfit_data/mask/02691156")
+# dir_checkpoint = Path("checkpoints")
+
 test_set = None
 
 
@@ -249,7 +259,7 @@ def train_net(
                         {
                             f"{num_samplings} samplings":{
                                 "Dice_Score": val_score,
-                                "image": wandb.Image(val_image_set[i][j][0].cpu()),
+                                "image": wandb.Image(EnlargePointsForVisualization(val_image_set[i][j][0].cpu())),
                                 "test_masks": {
                                     "true": wandb.Image(val_mask_true_set[i].argmax(dim=1)[j].float().cpu()),
                                     "pred": wandb.Image(val_mask_pred_set[i].argmax(dim=1)[j].float().cpu()),

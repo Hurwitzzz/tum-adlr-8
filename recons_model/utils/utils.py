@@ -1,4 +1,20 @@
 import matplotlib.pyplot as plt
+import torchvision.transforms as transforms
+
+# img should be a tensor
+def EnlargePointsForVisualization (img):
+    convert_PIL=transforms.ToPILImage()
+    
+    rows=(img==1).nonzero(as_tuple=True)[0].tolist()
+    cols=(img==1).nonzero(as_tuple=True)[1].tolist()
+    # print(rows,cols)
+    img_clone=img.clone()
+    for row,col in zip(rows,cols): #for each sampling points
+        for i in range(-2,3):
+            for j in range(-2,3):
+                if((row+i<=99 and row+i>=0)and (col+j<=99 and col+j>=0)):
+                    img_clone[row+i][col+j]=1
+    return convert_PIL(img_clone)
 
 
 def plot_img_and_mask(img, mask):
