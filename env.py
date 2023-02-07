@@ -6,11 +6,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from gym import spaces
+from stable_baselines3.a2c import A2C
 from stable_baselines3.common import results_plotter
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.results_plotter import load_results, ts2xy
-from stable_baselines3.ppo.ppo import PPO
 from torch.utils.data import DataLoader
 
 import wandb
@@ -337,7 +337,7 @@ if __name__ == "__main__":
 
     callback = SaveOnBestTrainingRewardCallback(check_freq=check_freq, log_dir=log_dir, experiment=experiment)
 
-    model = PPO(
+    model = A2C(
         "CnnPolicy",
         env,
         n_steps=n_steps,
