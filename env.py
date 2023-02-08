@@ -143,7 +143,7 @@ class Tactile2DEnv(gym.Env):
         self.exp = experiment
 
         self.action_space = spaces.Box(
-            low=np.array([-1, -np.pi], dtype=np.float32), high=np.array([1, np.pi], dtype=np.float32), dtype=np.float32
+            low=np.array([-1, -1, -np.pi], dtype=np.float32), high=np.array([1, 1, np.pi], dtype=np.float32), dtype=np.float32
         )
         self.dataloader_ = DataLoader(dataset, shuffle=True, **loader_args)
         self.dataloader = iter(self.dataloader_)
@@ -153,8 +153,9 @@ class Tactile2DEnv(gym.Env):
         self.expected = None
         self.iter = 0
         self.global_iter = 0
-        self.prev_coef = 0
-        self.prev_hit = (45, 45)
+        # self.prev_coef = 0
+        self.prev_reward = 0
+        # self.prev_hit = (45, 45)
         self.loss_fn = loss_fn
 
         # Example for using image as input (channel-first; channel-last also works):
@@ -163,8 +164,11 @@ class Tactile2DEnv(gym.Env):
 
     def step(self, action):
 
-        pos, dir = action
-        pos = int((pos + 1) * 199.5)
+        side, offset, dir = action
+        side = int(np.clip(np.rint((side + 0.75) * 2), a_min=0, a_max=3)) # -0.25 - 1.75 -> -0.5 - 3.5
+        offset = int(np.clip( np.rint((offset + 0.99)*50), a_min=0, a_max=99))
+
+        pos = side * 100 + offset
 
         if pos < 100:
             x_pos = pos
@@ -181,34 +185,37 @@ class Tactile2DEnv(gym.Env):
 
         x_dir = np.cos(dir)
         y_dir = np.sin(dir)
-        prev_x, prev_y = self.prev_hit
+        # prev_x, prev_y = self.prev_hit
         # give reward to farther away actions
-        reward = (((x_pos - prev_x)/99)**2 + ((y_pos - prev_y)/99)**2)/2
+        reward = 0
 
         # print(pos)
 
         # print(x_pos, y_pos, x_dir, y_dir)
         next_x, next_y = self._ray_cast(x_dir, y_dir, x_pos, y_pos)
         if next_x != -1 and next_y != -1 and self.image[0, next_x, next_y] != 1:
-            self.image[0, next_x, next_y] = 1
-            self.prev_hit = (x_pos, y_pos)
+            self.image[0, next_x, next_y] = 1 # hit
+            # prev_x, prev_y = self.prev_hit
+            # self.prev_hit = (x_pos, y_pos)
+            # reward = 1 # + np.sqrt(((x_pos - prev_x)/99)**2 + ((y_pos - prev_y)/99)**2)/ np.sqrt(2) # give reward if we have a hit
 
-        recons = self.model(self.image[None, None, 0, ...].to(device=self.device, dtype=torch.float32))
+            recons = self.model(self.image[None, None, 0, ...].to(device=self.device, dtype=torch.float32))
 
-        argmax_recons = torch.argmax(recons, dim=1)
-        self.image[1, ...] = argmax_recons.detach().cpu()[0].type(torch.uint8)
-
-        mask_pred = torch.functional.F.one_hot(argmax_recons, self.model.n_classes).permute(0, 3, 1, 2).float()
-        mask_true = (
-            torch.functional.F.one_hot(self.expected.to(self.device), self.model.n_classes).permute(0, 3, 1, 2).float()
-        )
-        # compute the Dice score, ignoring background
-        coef = multiclass_dice_coeff(mask_pred[:, 1:, ...], mask_true[:, 1:, ...], reduce_batch_first=True)
-        coef = coef.detach().cpu().item()
-        # give reward to improvement over last reconstruction
-        reward *= (coef - self.prev_coef)
-        self.prev_coef = coef
-
+            argmax_recons = torch.argmax(recons, dim=1)
+            self.image[1, ...] = argmax_recons.detach().cpu()[0].type(torch.uint8)
+            # print(torch.unique(self.image[1, ...]))
+            mask_pred = torch.functional.F.one_hot(argmax_recons, self.model.n_classes).permute(0, 3, 1, 2).float()
+            mask_true = (
+                torch.functional.F.one_hot(self.expected.to(self.device), self.model.n_classes).permute(0, 3, 1, 2).float()
+            )
+            # compute the Dice score, ignoring background
+            coef = multiclass_dice_coeff(mask_pred[:, 1:, ...], mask_true[:, 1:, ...], reduce_batch_first=True)
+            coef = coef.detach().cpu().item()
+            # give reward to improvement over last reconstruction
+            reward = coef # (coef - self.prev_coef)
+            # self.prev_coef = coef
+        elif next_x != -1 and next_y != -1:
+            reward = self.prev_reward # give penalty if hit the same point
         if (self.global_iter % 1000) < 27 and self.iter == 14:
             self.exp.log(
                 {
@@ -220,7 +227,8 @@ class Tactile2DEnv(gym.Env):
                     "step": self.global_iter,
                 }
             )
-
+        # add starting points to observation space
+        self.image[0, x_pos, y_pos] = 1
         # + dice_loss(
         #     torch.functional.F.softmax(recons, dim=1).float(),
         #     torch.functional.F.one_hot(self.expected, 2).permute(0, 3, 1, 2).float(),
@@ -231,6 +239,7 @@ class Tactile2DEnv(gym.Env):
         self.iter += 1
         self.global_iter += 1
         done = self.iter > 14
+        self.prev_reward = reward
 
         return (
             np.array(self.image, dtype=np.uint8) * 255,
@@ -280,7 +289,9 @@ class Tactile2DEnv(gym.Env):
             batch = next(self.dataloader)
         self.expected = batch["mask"].to(dtype=torch.long)
         self.iter = 0
-        self.prev_coef = 0
+        # self.prev_coef = 0
+        # self.prev_hit = (45,45)
+        self.prev_reward = 0
         return np.array(self.image, dtype=np.uint8)
 
     def render(self, mode="human", close=False):
