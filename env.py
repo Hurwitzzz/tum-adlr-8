@@ -117,9 +117,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                         f"Best mean reward: {self.best_mean_reward:.2f} -"
                         + f" Last mean reward per episode: {mean_reward:.2f}"
                     )
-                    self.exp.log(
-                        {"num_timesteps": self.num_timesteps, "mean_reward": mean_reward, "step": self.global_Step}
-                    )
+                    self.exp.log({"num_timesteps": self.num_timesteps, "mean_reward": mean_reward})
 
                 # New best model, you could save the agent here
                 if mean_reward > self.best_mean_reward:
@@ -137,7 +135,7 @@ class Tactile2DEnv(gym.Env):
 
     metadata = {"render.modes": ["human"]}
 
-    def __init__(self, recons_model, dataloader, loss_fn, device, experiment):
+    def __init__(self, recons_model, dataset, loss_fn, device, experiment, loader_args):
         super(Tactile2DEnv, self).__init__()
         # Define action and observation space
         # They must be gym.spaces objects
@@ -147,14 +145,15 @@ class Tactile2DEnv(gym.Env):
         self.action_space = spaces.Box(
             low=np.array([-1, -np.pi], dtype=np.float32), high=np.array([1, np.pi], dtype=np.float32), dtype=np.float32
         )
-        self.dataloader_ = dataloader
-        self.dataloader = iter(dataloader)
+        self.dataloader_ = DataLoader(dataset, shuffle=True, **loader_args)
+        self.dataloader = iter(self.dataloader_)
         self.device = device
         # self.expected = next(self.dataloader)["mask"]
         self.image = None
         self.expected = None
         self.iter = 0
         self.global_iter = 0
+        self.prev_coef = 0
 
         self.loss_fn = loss_fn
 
@@ -184,17 +183,13 @@ class Tactile2DEnv(gym.Env):
         y_dir = np.sin(dir)
 
         # print(pos)
+
         # print(x_pos, y_pos, x_dir, y_dir)
         next_x, next_y = self._ray_cast(x_dir, y_dir, x_pos, y_pos)
-        reward = 0
         if next_x != -1 and next_y != -1 and self.image[0, next_x, next_y] != 1:
             self.image[0, next_x, next_y] = 1
-            reward = 1
-        else:
-            pass
-            # self.reward = np.clip(self.reward - 1, a_min=0, a_max=np.inf)
 
-        """recons = self.model(self.image[None, None, 0, ...].to(device=self.device, dtype=torch.float32))
+        recons = self.model(self.image[None, None, 0, ...].to(device=self.device, dtype=torch.float32))
 
         argmax_recons = torch.argmax(recons, dim=1)
         self.image[1, ...] = argmax_recons.detach().cpu()[0].type(torch.uint8)
@@ -205,7 +200,11 @@ class Tactile2DEnv(gym.Env):
         )
         # compute the Dice score, ignoring background
         coef = multiclass_dice_coeff(mask_pred[:, 1:, ...], mask_true[:, 1:, ...], reduce_batch_first=True)
-        reward += coef.detach().cpu().item()"""
+        coef = coef.detach().cpu().item()
+
+        reward = coef - self.prev_coef
+        self.prev_coef = coef
+
         if (self.global_iter % 1000) == 0:
             self.exp.log(
                 {
@@ -315,7 +314,6 @@ if __name__ == "__main__":
     batch_size = 1
     train_set = Tactile2dDataset(train_dir_img, dir_mask, 1.0)
     loader_args = dict(batch_size=batch_size, num_workers=4, pin_memory=True)
-    train_loader = DataLoader(train_set, shuffle=True, **loader_args)
 
     loss_fn = torch.nn.CrossEntropyLoss()
 
@@ -325,10 +323,11 @@ if __name__ == "__main__":
         monitor_dir=log_dir,
         env_kwargs={
             "recons_model": model,
-            "dataloader": train_loader,
+            "dataset": train_set,
             "loss_fn": loss_fn,
             "device": device,
             "experiment": experiment,
+            "loader_args": loader_args,
         },
     )
     # env = Monitor(env, log_dir)
@@ -347,7 +346,7 @@ if __name__ == "__main__":
         # n_epochs=10, learning_rate=3e-4,
         seed=0,
         device=device,
-        )
+    )
     model.learn(total_timesteps=total_timestamps, callback=callback)
 
     results_plotter.plot_results([log_dir], total_timestamps, results_plotter.X_TIMESTEPS, "Tactile")
