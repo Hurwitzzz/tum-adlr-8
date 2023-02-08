@@ -154,7 +154,7 @@ class Tactile2DEnv(gym.Env):
         self.iter = 0
         self.global_iter = 0
         self.prev_coef = 0
-
+        self.prev_hit = (45, 45)
         self.loss_fn = loss_fn
 
         # Example for using image as input (channel-first; channel-last also works):
@@ -181,6 +181,9 @@ class Tactile2DEnv(gym.Env):
 
         x_dir = np.cos(dir)
         y_dir = np.sin(dir)
+        prev_x, prev_y = self.prev_hit
+        # give reward to farther away actions
+        reward = (((x_pos - prev_x)/99)**2 + ((y_pos - prev_y)/99)**2)/2
 
         # print(pos)
 
@@ -188,6 +191,7 @@ class Tactile2DEnv(gym.Env):
         next_x, next_y = self._ray_cast(x_dir, y_dir, x_pos, y_pos)
         if next_x != -1 and next_y != -1 and self.image[0, next_x, next_y] != 1:
             self.image[0, next_x, next_y] = 1
+            self.prev_hit = (x_pos, y_pos)
 
         recons = self.model(self.image[None, None, 0, ...].to(device=self.device, dtype=torch.float32))
 
@@ -201,8 +205,8 @@ class Tactile2DEnv(gym.Env):
         # compute the Dice score, ignoring background
         coef = multiclass_dice_coeff(mask_pred[:, 1:, ...], mask_true[:, 1:, ...], reduce_batch_first=True)
         coef = coef.detach().cpu().item()
-
-        reward = coef - self.prev_coef
+        # give reward to improvement over last reconstruction
+        reward *= (coef - self.prev_coef)
         self.prev_coef = coef
 
         if (self.global_iter % 1000) < 27 and self.iter == 14:
@@ -276,7 +280,7 @@ class Tactile2DEnv(gym.Env):
             batch = next(self.dataloader)
         self.expected = batch["mask"].to(dtype=torch.long)
         self.iter = 0
-
+        self.prev_coef = 0
         return np.array(self.image, dtype=np.uint8)
 
     def render(self, mode="human", close=False):
@@ -287,9 +291,9 @@ class Tactile2DEnv(gym.Env):
 
 
 if __name__ == "__main__":
-    lr = 5e-4
+    lr = 6e-4
     n_steps = 5
-    total_timestamps = 500000
+    total_timestamps = 5000000
     n_env = 8
     device = "cuda"
     check_freq = 10000
