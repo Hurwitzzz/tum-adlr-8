@@ -205,7 +205,7 @@ class Tactile2DEnv(gym.Env):
         reward = coef - self.prev_coef
         self.prev_coef = coef
 
-        if (self.global_iter % 1000) == 0:
+        if (self.global_iter % 1000) < 27 and self.iter == 14:
             self.exp.log(
                 {
                     "obs": {
