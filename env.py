@@ -159,7 +159,7 @@ class Tactile2DEnv(gym.Env):
         self.loss_fn = loss_fn
 
         # Example for using image as input (channel-first; channel-last also works):
-        self.observation_space = spaces.Box(low=0, high=255, shape=(2, 100, 100), dtype=np.uint8)
+        self.observation_space = spaces.Box(low=0, high=255, shape=(3, 100, 100), dtype=np.uint8)
         self.model = recons_model
 
     def step(self, action):
@@ -189,6 +189,10 @@ class Tactile2DEnv(gym.Env):
         # give reward to farther away actions
         reward = 0
 
+        if self.image[2, x_pos, y_pos] == 1:
+            reward -= 0.5
+
+        self.image[2, x_pos, y_pos] = 1
         # print(pos)
 
         # print(x_pos, y_pos, x_dir, y_dir)
@@ -212,10 +216,12 @@ class Tactile2DEnv(gym.Env):
             coef = multiclass_dice_coeff(mask_pred[:, 1:, ...], mask_true[:, 1:, ...], reduce_batch_first=True)
             coef = coef.detach().cpu().item()
             # give reward to improvement over last reconstruction
-            reward = coef # (coef - self.prev_coef)
+            reward += coef # (coef - self.prev_coef)
             # self.prev_coef = coef
         elif next_x != -1 and next_y != -1:
-            reward = self.prev_reward # give penalty if hit the same point
+            reward += self.prev_reward # give penalty if hit the same point
+        else:
+            reward -= 0.5
         if (self.global_iter % 1000) < 27 and self.iter == 14:
             self.exp.log(
                 {
@@ -223,12 +229,11 @@ class Tactile2DEnv(gym.Env):
                         "predicted_image": wandb.Image(self.image[1].float()),
                         "expected_image": wandb.Image(self.expected[0].float()),
                         "sample_points": wandb.Image(self.image[0].float()),
+                        "ray_points": wandb.Image(self.image[2].float()),
                     },
                     "step": self.global_iter,
                 }
             )
-        # add starting points to observation space
-        self.image[0, x_pos, y_pos] = 1
         # + dice_loss(
         #     torch.functional.F.softmax(recons, dim=1).float(),
         #     torch.functional.F.one_hot(self.expected, 2).permute(0, 3, 1, 2).float(),
@@ -275,13 +280,15 @@ class Tactile2DEnv(gym.Env):
             y_pos += y_dir
 
             x, y = np.clip(int(x_pos), a_min=0, a_max=99, dtype=int), np.clip(int(y_pos), a_min=0, a_max=99, dtype=int)
+            # plot the ray for observation
+            self.image[2, x, y] = 1
             if img[x, y]:
                 return x, y
 
         return -1, -1
 
     def reset(self):
-        self.image = torch.zeros((2, 100, 100), dtype=torch.uint8)
+        self.image = torch.zeros((3, 100, 100), dtype=torch.uint8)
         try:
             batch = next(self.dataloader)
         except Exception:
