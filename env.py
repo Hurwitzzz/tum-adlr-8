@@ -176,19 +176,19 @@ class Tactile2DEnv(gym.Env):
         if pos < 100:  # top
             x_pos = pos
             y_pos = 0
-            dir += np.pi
+            dir = dir
         elif 100 <= pos < 200:  # bottom
             x_pos = 99
             y_pos = pos - 100
-            dir = dir
+            dir += np.pi
         elif 200 <= pos < 300:  # right
             x_pos = pos - 200
             y_pos = 99
-            dir -= np.pi / 2
+            dir += np.pi / 2
         elif 300 <= pos < 400:  # left
             x_pos = 0
             y_pos = pos - 300
-            dir += np.pi / 2
+            dir -= np.pi / 2
 
         x_dir = np.cos(dir)
         y_dir = np.sin(dir)
