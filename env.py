@@ -143,7 +143,9 @@ class Tactile2DEnv(gym.Env):
         self.exp = experiment
 
         self.action_space = spaces.Box(
-            low=np.array([-1, -1, -np.pi], dtype=np.float32), high=np.array([1, 1, np.pi], dtype=np.float32), dtype=np.float32
+            low=np.array([-1, -1, -np.pi / 2], dtype=np.float32),
+            high=np.array([1, 1, np.pi / 2], dtype=np.float32),
+            dtype=np.float32,
         )
         self.dataloader_ = DataLoader(dataset, shuffle=True, **loader_args)
         self.dataloader = iter(self.dataloader_)
@@ -165,23 +167,28 @@ class Tactile2DEnv(gym.Env):
     def step(self, action):
 
         side, offset, dir = action
-        side = int(np.clip(np.rint((side + 0.75) * 2), a_min=0, a_max=3)) # -0.25 - 1.75 -> -0.5 - 3.5
-        offset = int(np.clip( np.rint((offset + 0.99)*50), a_min=0, a_max=99))
+        dir += np.pi / 2
+        side = int(np.clip(np.rint((side + 0.75) * 2), a_min=0, a_max=3))  # -0.25 - 1.75 -> -0.5 - 3.5
+        offset = int(np.clip(np.rint((offset + 0.99) * 50), a_min=0, a_max=99))
 
         pos = side * 100 + offset
 
-        if pos < 100:
+        if pos < 100:  # top
             x_pos = pos
             y_pos = 0
-        elif 100 <= pos < 200:
+            dir += np.pi
+        elif 100 <= pos < 200:  # bottom
             x_pos = 99
             y_pos = pos - 100
-        elif 200 <= pos < 300:
+            dir = dir
+        elif 200 <= pos < 300:  # right
             x_pos = pos - 200
             y_pos = 99
-        elif 300 <= pos < 400:
+            dir -= np.pi / 2
+        elif 300 <= pos < 400:  # left
             x_pos = 0
             y_pos = pos - 300
+            dir += np.pi / 2
 
         x_dir = np.cos(dir)
         y_dir = np.sin(dir)
@@ -190,7 +197,7 @@ class Tactile2DEnv(gym.Env):
         reward = 0
 
         if self.image[2, x_pos, y_pos] == 1:
-            reward -= 0.5
+            reward -= 0.2
 
         self.image[2, x_pos, y_pos] = 1
         # print(pos)
@@ -198,10 +205,11 @@ class Tactile2DEnv(gym.Env):
         # print(x_pos, y_pos, x_dir, y_dir)
         next_x, next_y = self._ray_cast(x_dir, y_dir, x_pos, y_pos)
         if next_x != -1 and next_y != -1 and self.image[0, next_x, next_y] != 1:
-            self.image[0, next_x, next_y] = 1 # hit
+            self.image[0, next_x, next_y] = 1  # hit
             # prev_x, prev_y = self.prev_hit
             # self.prev_hit = (x_pos, y_pos)
-            # reward = 1 # + np.sqrt(((x_pos - prev_x)/99)**2 + ((y_pos - prev_y)/99)**2)/ np.sqrt(2) # give reward if we have a hit
+            # reward = 1 # + np.sqrt(((x_pos - prev_x)/99)**2 + ((y_pos - prev_y)/99)**2)/ np.sqrt(2)
+            # # give reward if we have a hit
 
             recons = self.model(self.image[None, None, 0, ...].to(device=self.device, dtype=torch.float32))
 
@@ -210,18 +218,20 @@ class Tactile2DEnv(gym.Env):
             # print(torch.unique(self.image[1, ...]))
             mask_pred = torch.functional.F.one_hot(argmax_recons, self.model.n_classes).permute(0, 3, 1, 2).float()
             mask_true = (
-                torch.functional.F.one_hot(self.expected.to(self.device), self.model.n_classes).permute(0, 3, 1, 2).float()
+                torch.functional.F.one_hot(self.expected.to(self.device), self.model.n_classes)
+                .permute(0, 3, 1, 2)
+                .float()
             )
             # compute the Dice score, ignoring background
             coef = multiclass_dice_coeff(mask_pred[:, 1:, ...], mask_true[:, 1:, ...], reduce_batch_first=True)
             coef = coef.detach().cpu().item()
             # give reward to improvement over last reconstruction
-            reward += coef # (coef - self.prev_coef)
+            reward += coef  # (coef - self.prev_coef)
             # self.prev_coef = coef
         elif next_x != -1 and next_y != -1:
-            reward += self.prev_reward # give penalty if hit the same point
+            reward += self.prev_reward  # give penalty if hit the same point
         else:
-            reward -= 0.5
+            reward -= 0.3
         if (self.global_iter % 1000) < 27 and self.iter == 14:
             self.exp.log(
                 {
