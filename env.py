@@ -196,8 +196,8 @@ class Tactile2DEnv(gym.Env):
         # give reward to farther away actions
         reward = 0
 
-        if self.image[2, x_pos, y_pos] == 1:
-            reward -= 0.2
+        # if self.image[2, x_pos, y_pos] == 1:
+        #    reward -= 0.2
 
         self.image[2, x_pos, y_pos] = 1
         # print(pos)
@@ -231,7 +231,8 @@ class Tactile2DEnv(gym.Env):
         elif next_x != -1 and next_y != -1:
             reward += self.prev_reward  # give penalty if hit the same point
         else:
-            reward -= 0.3
+            pass
+            # reward -= 0.3
         if (self.global_iter % 1000) < 27 and self.iter == 14:
             self.exp.log(
                 {
