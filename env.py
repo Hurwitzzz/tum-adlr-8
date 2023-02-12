@@ -6,11 +6,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from gym import spaces
-from stable_baselines3.a2c import A2C
 from stable_baselines3.common import results_plotter
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.results_plotter import load_results, ts2xy
+from stable_baselines3.ppo import PPO
 from torch.utils.data import DataLoader
 
 import wandb
@@ -177,14 +177,14 @@ class Tactile2DEnv(gym.Env):
             x_pos = pos
             y_pos = 0
             dir = dir
-        elif 100 <= pos < 200:  # bottom
+        elif 100 <= pos < 200:  # right
             x_pos = 99
             y_pos = pos - 100
-            dir += np.pi
-        elif 200 <= pos < 300:  # right
+            dir += np.pi/2
+        elif 200 <= pos < 300:  # bottom
             x_pos = pos - 200
             y_pos = 99
-            dir += np.pi / 2
+            dir += np.pi
         elif 300 <= pos < 400:  # left
             x_pos = 0
             y_pos = pos - 300
@@ -369,11 +369,11 @@ if __name__ == "__main__":
 
     callback = SaveOnBestTrainingRewardCallback(check_freq=check_freq, log_dir=log_dir, experiment=experiment)
 
-    model = A2C(
+    model = PPO(
         "CnnPolicy",
         env,
-        n_steps=n_steps,
-        use_rms_prop=False,
+        # n_steps=n_steps,
+        # use_rms_prop=False,
         learning_rate=linear_schedule(lr),
         # batch_size=16,
         # n_epochs=10, learning_rate=3e-4,
