@@ -7,13 +7,11 @@ import numpy as np
 import torch
 from gym import spaces
 from stable_baselines3.common import results_plotter
-from stable_baselines3.common import policies # import CnnLnLstmPolicy, CnnLstmPolicy
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.results_plotter import load_results, ts2xy
 from stable_baselines3.ppo import PPO
 from torch.utils.data import DataLoader
-from sb3_contrib import RecurrentPPO
 
 import wandb
 from recons_model.train import dir_mask, train_dir_img
@@ -65,7 +63,7 @@ def plot_results(log_folder, title="Learning Curve"):
     x, y = ts2xy(load_results(log_folder), "timesteps")
     y = moving_average(y, window=50)
     # Truncate x
-    x = x[len(x) - len(y):]
+    x = x[len(x) - len(y) :]
 
     _ = plt.figure(title)
     plt.plot(x, y)
@@ -163,11 +161,16 @@ class Tactile2DEnv(gym.Env):
         self.loss_fn = loss_fn
 
         # Example for using image as input (channel-first; channel-last also works):
-        self.observation_space = spaces.Box(low=0, high=255, shape=(4, 100, 100), dtype=np.uint8)
+        self.observation_space = spaces.Dict(
+            {
+                "sample_points": spaces.Box(low=0, high=255, shape=(1, 100, 100), dtype=np.uint8),
+                "reconstruction": spaces.Box(low=0, high=255, shape=(2, 100, 100), dtype=np.uint8),
+                "ray": spaces.Box(low=0, high=255, shape=(1, 100, 100), dtype=np.uint8),
+            }
+        )
         self.model = recons_model
 
-    def step(self, action):
-
+    def convert_continuous_actions_into_meaningful_actions(self, action):
         side, offset, dir = action
         dir += np.pi / 2
         side = int(np.clip(np.rint((side + 0.75) * 2), a_min=0, a_max=3))  # -0.25 - 1.75 -> -0.5 - 3.5
@@ -182,7 +185,7 @@ class Tactile2DEnv(gym.Env):
         elif 100 <= pos < 200:  # right
             x_pos = 99
             y_pos = pos - 100
-            dir += np.pi/2
+            dir += np.pi / 2
         elif 200 <= pos < 300:  # bottom
             x_pos = pos - 200
             y_pos = 99
@@ -194,48 +197,44 @@ class Tactile2DEnv(gym.Env):
 
         x_dir = np.cos(dir)
         y_dir = np.sin(dir)
-        # prev_x, prev_y = self.prev_hit
-        # give reward to farther away actions
+
+        return x_dir, y_dir, x_pos, y_pos
+
+    def step(self, action):
+        x_dir, y_dir, x_pos, y_pos = self.convert_continuous_actions_into_meaningful_actions(action)
+
+        # define reward
         reward = 0
 
-        # if self.image[2, x_pos, y_pos] == 1:
-        #    reward -= 0.2
-
+        # mark starting position
         self.image[3, x_pos, y_pos] = 1
-        # print(pos)
 
-        # print(x_pos, y_pos, x_dir, y_dir)
+        # get sampled point and mark ray within function
         next_x, next_y = self._ray_cast(x_dir, y_dir, x_pos, y_pos)
+
+        # if point is sampled and new
         if next_x != -1 and next_y != -1 and self.image[0, next_x, next_y] != 1:
-            self.image[0, next_x, next_y] = 1  # hit
-            # prev_x, prev_y = self.prev_hit
-            # self.prev_hit = (x_pos, y_pos)
-            # reward = 1 # + np.sqrt(((x_pos - prev_x)/99)**2 + ((y_pos - prev_y)/99)**2)/ np.sqrt(2)
-            # # give reward if we have a hit
+            # mark hit
+            self.image[0, next_x, next_y] = 1
+            reward += self.get_reward()
 
-            recons = self.model(self.image[None, None, 0, ...].to(device=self.device, dtype=torch.float32))
+        self.log()
 
-            argmax_recons = torch.argmax(recons, dim=1)
-            self.image[1:3, ...] = torch.nn.functional.softmax(recons.detach().cpu()[0], dim=0)
-            # print(torch.unique(self.image[1, ...]))
-            mask_pred = torch.functional.F.one_hot(argmax_recons, self.model.n_classes).permute(0, 3, 1, 2).float()
-            mask_true = (
-                torch.functional.F.one_hot(self.expected.to(self.device), self.model.n_classes)
-                .permute(0, 3, 1, 2)
-                .float()
-            )
-            # compute the Dice score, ignoring background
-            coef = multiclass_dice_coeff(mask_pred[:, 1:, ...], mask_true[:, 1:, ...], reduce_batch_first=True)
-            coef = coef.detach().cpu().item()
-            # give reward to improvement over last reconstruction
-            reward += coef  # (coef - self.prev_coef)
-            # self.prev_coef = coef
-        # elif next_x != -1 and next_y != -1:
-        #     reward += self.prev_reward  # give penalty if hit the same point
-        # else:
-        #     pass
-        #     # reward -= 0.3
-        # print(self.image[2])
+        self.iter += 1
+        self.global_iter += 1
+        done = self.iter > 14
+        return (
+            {
+                "sample_points": np.array(self.image[0:1] * 255, dtype=np.uint8),
+                "reconstruction": np.array(self.image[1:3] * 255, dtype=np.uint8),
+                "ray": np.array(self.image[3:] * 255, dtype=np.uint8),
+            },
+            reward,
+            done,
+            {},
+        )
+
+    def log(self):
         if (self.global_iter % 1000) < 27 and self.iter == 14:
             self.exp.log(
                 {
@@ -248,24 +247,20 @@ class Tactile2DEnv(gym.Env):
                     "step": self.global_iter,
                 }
             )
-        # + dice_loss(
-        #     torch.functional.F.softmax(recons, dim=1).float(),
-        #     torch.functional.F.one_hot(self.expected, 2).permute(0, 3, 1, 2).float(),
-        #     multiclass=True,
-        # )
-        # print(loss.item())
 
-        self.iter += 1
-        self.global_iter += 1
-        done = self.iter > 14
-        self.prev_reward = reward
-        # print(np.unique(np.array(self.image * 255, dtype=np.uint8)))
-        return (
-            np.array(self.image * 255, dtype=np.uint8),
-            reward,
-            done,
-            {},
+    def get_reward(self):
+        # generate reconstruction and calculate reward
+        recons = self.model(self.image[None, None, 0, ...].to(device=self.device, dtype=torch.float32))
+
+        argmax_recons = torch.argmax(recons, dim=1)
+        self.image[1:3, ...] = torch.nn.functional.softmax(recons.detach().cpu()[0], dim=0)
+        mask_pred = torch.functional.F.one_hot(argmax_recons, self.model.n_classes).permute(0, 3, 1, 2).float()
+        mask_true = (
+            torch.functional.F.one_hot(self.expected.to(self.device), self.model.n_classes).permute(0, 3, 1, 2).float()
         )
+        coef = multiclass_dice_coeff(mask_pred[:, 1:, ...], mask_true[:, 1:, ...], reduce_batch_first=True)
+        coef = coef.detach().cpu().item()
+        return coef
 
     def _ray_cast(self, x_dir, y_dir, x_pos, y_pos):
         """Using given starting position on the frame, and also the vector direction given
@@ -310,10 +305,11 @@ class Tactile2DEnv(gym.Env):
             batch = next(self.dataloader)
         self.expected = batch["mask"].to(dtype=torch.long)
         self.iter = 0
-        # self.prev_coef = 0
-        # self.prev_hit = (45,45)
-        self.prev_reward = 0
-        return np.array(self.image, dtype=np.uint8)
+        return {
+            "sample_points": np.array(self.image[0:1] * 255, dtype=np.uint8),
+            "reconstruction": np.array(self.image[1:3] * 255, dtype=np.uint8),
+            "ray": np.array(self.image[3:] * 255, dtype=np.uint8),
+        }
 
     def render(self, mode="human", close=False):
         pass
@@ -330,7 +326,7 @@ if __name__ == "__main__":
     device = "cuda"
     check_freq = 10000
 
-    experiment = wandb.init(project="tactile experiment", name="CnnLstmPolicy",  resume="allow", anonymous="must")
+    experiment = wandb.init(project="tactile experiment", name="CnnPolicy", resume="allow", anonymous="must")
     experiment.config.update(
         dict(
             total_timestamps=total_timestamps, n_steps=n_steps, n_env=n_env, lr=lr, device=device, check_freq=check_freq
@@ -371,9 +367,9 @@ if __name__ == "__main__":
     # Define and Train the agent
 
     callback = SaveOnBestTrainingRewardCallback(check_freq=check_freq, log_dir=log_dir, experiment=experiment)
-
-    model = RecurrentPPO(
-        "CnnLstmPolicy",
+    policy_kwargs = dict(activation_fn=torch.nn.ReLU, net_arch=dict(pi=[32, 32, 32], vf=[32, 32, 32]))
+    model = PPO(
+        "MultiInputPolicy",
         env,
         # n_steps=n_steps,
         # use_rms_prop=False,
@@ -382,6 +378,7 @@ if __name__ == "__main__":
         # n_epochs=10, learning_rate=3e-4,
         seed=0,
         device=device,
+        policy_kwargs=policy_kwargs,
     )
     print(experiment.name)
     model.learn(total_timesteps=total_timestamps, callback=callback)
