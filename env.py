@@ -135,7 +135,7 @@ class Tactile2DEnv(gym.Env):
 
     metadata = {"render.modes": ["human"]}
 
-    def __init__(self, recons_model, dataset, loss_fn, device, experiment, loader_args):
+    def __init__(self, recons_model, dataset, device, experiment, loader_args):
         super(Tactile2DEnv, self).__init__()
         # Define action and observation space
         # They must be gym.spaces objects
@@ -155,10 +155,8 @@ class Tactile2DEnv(gym.Env):
         self.expected = None
         self.iter = 0
         self.global_iter = 0
-        # self.prev_coef = 0
-        self.prev_reward = 0
-        # self.prev_hit = (45, 45)
-        self.loss_fn = loss_fn
+        self.prev_pos = None
+        self.prev_dir = None
 
         # Example for using image as input (channel-first; channel-last also works):
         self.observation_space = spaces.Dict(
@@ -166,6 +164,8 @@ class Tactile2DEnv(gym.Env):
                 "sample_points": spaces.Box(low=0, high=255, shape=(1, 100, 100), dtype=np.uint8),
                 "reconstruction": spaces.Box(low=0, high=255, shape=(2, 100, 100), dtype=np.uint8),
                 "ray": spaces.Box(low=0, high=255, shape=(1, 100, 100), dtype=np.uint8),
+                "prev_pos": spaces.Box(low=0, high=99, shape=(14, 2), dtype=np.uint8),
+                "prev_dir": spaces.Box(low=0, high=1, shape=(14, 2), dtype=np.float32),
             }
         )
         self.model = recons_model
@@ -197,6 +197,9 @@ class Tactile2DEnv(gym.Env):
 
         x_dir = np.cos(dir)
         y_dir = np.sin(dir)
+        
+        self.prev_pos[self.iter, :] = np.array([x_pos, y_pos])
+        self.prev_dir[self.iter, :] = np.array([x_dir, y_dir])
 
         return x_dir, y_dir, x_pos, y_pos
 
@@ -222,12 +225,16 @@ class Tactile2DEnv(gym.Env):
 
         self.iter += 1
         self.global_iter += 1
-        done = self.iter > 14
+
+        done = self.iter == 14
+
         return (
             {
                 "sample_points": np.array(self.image[0:1] * 255, dtype=np.uint8),
                 "reconstruction": np.array(self.image[1:3] * 255, dtype=np.uint8),
                 "ray": np.array(self.image[3:] * 255, dtype=np.uint8),
+                "prev_pos": self.prev_pos,
+                "prev_dir": self.prev_dir
             },
             reward,
             done,
@@ -239,7 +246,8 @@ class Tactile2DEnv(gym.Env):
             self.exp.log(
                 {
                     "obs": {
-                        "predicted_image": wandb.Image(self.image[2].float()),
+                        "predicted_image_foreground": wandb.Image(self.image[2].float()),
+                        "predicted_image_background": wandb.Image(self.image[1].float()),
                         "expected_image": wandb.Image(self.expected[0].float()),
                         "sample_points": wandb.Image(self.image[0].float()),
                         "ray_points": wandb.Image(self.image[3].float()),
@@ -305,10 +313,16 @@ class Tactile2DEnv(gym.Env):
             batch = next(self.dataloader)
         self.expected = batch["mask"].to(dtype=torch.long)
         self.iter = 0
+        
+        self.prev_pos = np.zeros((14, 2))
+        self.prev_dir = np.zeros((14, 2))
+        
         return {
             "sample_points": np.array(self.image[0:1] * 255, dtype=np.uint8),
             "reconstruction": np.array(self.image[1:3] * 255, dtype=np.uint8),
             "ray": np.array(self.image[3:] * 255, dtype=np.uint8),
+            "prev_pos": self.prev_pos,
+            "prev_dir": self.prev_dir
         }
 
     def render(self, mode="human", close=False):
@@ -326,7 +340,7 @@ if __name__ == "__main__":
     device = "cuda"
     check_freq = 10000
 
-    experiment = wandb.init(project="tactile experiment", name="CnnPolicy", resume="allow", anonymous="must")
+    experiment = wandb.init(project="tactile experiment", name="MultiInput", resume="allow", anonymous="must")
     experiment.config.update(
         dict(
             total_timestamps=total_timestamps, n_steps=n_steps, n_env=n_env, lr=lr, device=device, check_freq=check_freq
@@ -347,8 +361,6 @@ if __name__ == "__main__":
     train_set = Tactile2dDataset(train_dir_img, dir_mask, 1.0)
     loader_args = dict(batch_size=batch_size, num_workers=4, pin_memory=True)
 
-    loss_fn = torch.nn.CrossEntropyLoss()
-
     env = make_vec_env(
         Tactile2DEnv,
         n_envs=n_env,
@@ -356,7 +368,6 @@ if __name__ == "__main__":
         env_kwargs={
             "recons_model": model,
             "dataset": train_set,
-            "loss_fn": loss_fn,
             "device": device,
             "experiment": experiment,
             "loader_args": loader_args,
