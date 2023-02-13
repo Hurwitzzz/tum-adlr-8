@@ -7,11 +7,13 @@ import numpy as np
 import torch
 from gym import spaces
 from stable_baselines3.common import results_plotter
+from stable_baselines3.common import policies # import CnnLnLstmPolicy, CnnLstmPolicy
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.results_plotter import load_results, ts2xy
 from stable_baselines3.ppo import PPO
 from torch.utils.data import DataLoader
+from sb3_contrib import RecurrentPPO
 
 import wandb
 from recons_model.train import dir_mask, train_dir_img
@@ -125,7 +127,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                     # Example for saving best model
                     if self.verbose > 0:
                         print(f"Saving new best model to {self.save_path}.zip")
-                    self.model.save(self.save_path)
+                    self.model.save(self.save_path + str(experiment.name))
 
         return True
 
@@ -161,7 +163,7 @@ class Tactile2DEnv(gym.Env):
         self.loss_fn = loss_fn
 
         # Example for using image as input (channel-first; channel-last also works):
-        self.observation_space = spaces.Box(low=0, high=255, shape=(3, 100, 100), dtype=np.uint8)
+        self.observation_space = spaces.Box(low=0, high=255, shape=(4, 100, 100), dtype=np.uint8)
         self.model = recons_model
 
     def step(self, action):
@@ -199,7 +201,7 @@ class Tactile2DEnv(gym.Env):
         # if self.image[2, x_pos, y_pos] == 1:
         #    reward -= 0.2
 
-        self.image[2, x_pos, y_pos] = 1
+        self.image[3, x_pos, y_pos] = 1
         # print(pos)
 
         # print(x_pos, y_pos, x_dir, y_dir)
@@ -214,7 +216,7 @@ class Tactile2DEnv(gym.Env):
             recons = self.model(self.image[None, None, 0, ...].to(device=self.device, dtype=torch.float32))
 
             argmax_recons = torch.argmax(recons, dim=1)
-            self.image[1, ...] = argmax_recons.detach().cpu()[0].type(torch.uint8)
+            self.image[1:3, ...] = torch.nn.functional.softmax(recons.detach().cpu()[0], dim=0)
             # print(torch.unique(self.image[1, ...]))
             mask_pred = torch.functional.F.one_hot(argmax_recons, self.model.n_classes).permute(0, 3, 1, 2).float()
             mask_true = (
@@ -228,19 +230,20 @@ class Tactile2DEnv(gym.Env):
             # give reward to improvement over last reconstruction
             reward += coef  # (coef - self.prev_coef)
             # self.prev_coef = coef
-        elif next_x != -1 and next_y != -1:
-            reward += self.prev_reward  # give penalty if hit the same point
-        else:
-            pass
-            # reward -= 0.3
+        # elif next_x != -1 and next_y != -1:
+        #     reward += self.prev_reward  # give penalty if hit the same point
+        # else:
+        #     pass
+        #     # reward -= 0.3
+        # print(self.image[2])
         if (self.global_iter % 1000) < 27 and self.iter == 14:
             self.exp.log(
                 {
                     "obs": {
-                        "predicted_image": wandb.Image(self.image[1].float()),
+                        "predicted_image": wandb.Image(self.image[2].float()),
                         "expected_image": wandb.Image(self.expected[0].float()),
                         "sample_points": wandb.Image(self.image[0].float()),
-                        "ray_points": wandb.Image(self.image[2].float()),
+                        "ray_points": wandb.Image(self.image[3].float()),
                     },
                     "step": self.global_iter,
                 }
@@ -256,9 +259,9 @@ class Tactile2DEnv(gym.Env):
         self.global_iter += 1
         done = self.iter > 14
         self.prev_reward = reward
-
+        # print(np.unique(np.array(self.image * 255, dtype=np.uint8)))
         return (
-            np.array(self.image, dtype=np.uint8) * 255,
+            np.array(self.image * 255, dtype=np.uint8),
             reward,
             done,
             {},
@@ -292,14 +295,14 @@ class Tactile2DEnv(gym.Env):
 
             x, y = np.clip(int(x_pos), a_min=0, a_max=99, dtype=int), np.clip(int(y_pos), a_min=0, a_max=99, dtype=int)
             # plot the ray for observation
-            self.image[2, x, y] = 1
+            self.image[3, x, y] = 1
             if img[x, y]:
                 return x, y
 
         return -1, -1
 
     def reset(self):
-        self.image = torch.zeros((3, 100, 100), dtype=torch.uint8)
+        self.image = torch.zeros((4, 100, 100), dtype=torch.float32)
         try:
             batch = next(self.dataloader)
         except Exception:
@@ -320,14 +323,14 @@ class Tactile2DEnv(gym.Env):
 
 
 if __name__ == "__main__":
-    lr = 6e-4
+    lr = 7e-4
     n_steps = 5
     total_timestamps = 5000000
     n_env = 8
     device = "cuda"
     check_freq = 10000
 
-    experiment = wandb.init(project="tactile experiment", resume="allow", anonymous="must")
+    experiment = wandb.init(project="tactile experiment", name="CnnLstmPolicy",  resume="allow", anonymous="must")
     experiment.config.update(
         dict(
             total_timestamps=total_timestamps, n_steps=n_steps, n_env=n_env, lr=lr, device=device, check_freq=check_freq
@@ -369,8 +372,8 @@ if __name__ == "__main__":
 
     callback = SaveOnBestTrainingRewardCallback(check_freq=check_freq, log_dir=log_dir, experiment=experiment)
 
-    model = PPO(
-        "CnnPolicy",
+    model = RecurrentPPO(
+        "CnnLstmPolicy",
         env,
         # n_steps=n_steps,
         # use_rms_prop=False,
@@ -380,6 +383,7 @@ if __name__ == "__main__":
         seed=0,
         device=device,
     )
+    print(experiment.name)
     model.learn(total_timesteps=total_timestamps, callback=callback)
 
     results_plotter.plot_results([log_dir], total_timestamps, results_plotter.X_TIMESTEPS, "Tactile")
