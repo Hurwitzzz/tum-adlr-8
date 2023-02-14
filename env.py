@@ -142,11 +142,14 @@ class Tactile2DEnv(gym.Env):
         # (x,y) and x_pos, y_pos
         self.exp = experiment
 
-        self.action_space = spaces.Box(
+        """ self.action_space = spaces.Box(
             low=np.array([-1, -1, -np.pi / 2], dtype=np.float32),
             high=np.array([1, 1, np.pi / 2], dtype=np.float32),
             dtype=np.float32,
-        )
+        ) """
+
+        self.action_space = spaces.MultiDiscrete((4, 100, 180))
+
         self.dataloader_ = DataLoader(dataset, shuffle=True, **loader_args)
         self.dataloader = iter(self.dataloader_)
         self.device = device
@@ -155,8 +158,6 @@ class Tactile2DEnv(gym.Env):
         self.expected = None
         self.iter = 0
         self.global_iter = 0
-        self.prev_pos = None
-        self.prev_dir = None
 
         # Example for using image as input (channel-first; channel-last also works):
         self.observation_space = spaces.Dict(
@@ -164,19 +165,17 @@ class Tactile2DEnv(gym.Env):
                 "sample_points": spaces.Box(low=0, high=255, shape=(1, 100, 100), dtype=np.uint8),
                 "reconstruction": spaces.Box(low=0, high=255, shape=(2, 100, 100), dtype=np.uint8),
                 "ray": spaces.Box(low=0, high=255, shape=(1, 100, 100), dtype=np.uint8),
-                "prev_pos": spaces.Box(low=0, high=99, shape=(14, 2), dtype=np.uint8),
-                "prev_dir": spaces.Box(low=0, high=1, shape=(14, 2), dtype=np.float32),
             }
         )
         self.model = recons_model
 
-    def convert_continuous_actions_into_meaningful_actions(self, action):
+    def convert_discrete_actions_into_meaningful_actions(self, action):
         side, offset, dir = action
-        dir += np.pi / 2
+        """ dir += np.pi / 2
         side = int(np.clip(np.rint((side + 0.75) * 2), a_min=0, a_max=3))  # -0.25 - 1.75 -> -0.5 - 3.5
-        offset = int(np.clip(np.rint((offset + 0.99) * 50), a_min=0, a_max=99))
-
+        offset = int(np.clip(np.rint((offset + 0.99) * 50), a_min=0, a_max=99)) """
         pos = side * 100 + offset
+        dir = np.deg2rad(dir)
 
         if pos < 100:  # top
             x_pos = pos
@@ -197,14 +196,14 @@ class Tactile2DEnv(gym.Env):
 
         x_dir = np.cos(dir)
         y_dir = np.sin(dir)
-        
-        self.prev_pos[self.iter, :] = np.array([x_pos, y_pos])
-        self.prev_dir[self.iter, :] = np.array([x_dir, y_dir])
+
+        # self.prev_pos[self.iter, :] = np.array([x_pos, y_pos])
+        # self.prev_dir[self.iter, :] = np.array([x_dir, y_dir])
 
         return x_dir, y_dir, x_pos, y_pos
 
     def step(self, action):
-        x_dir, y_dir, x_pos, y_pos = self.convert_continuous_actions_into_meaningful_actions(action)
+        x_dir, y_dir, x_pos, y_pos = self.convert_discrete_actions_into_meaningful_actions(action)
 
         # define reward
         reward = 0
@@ -233,8 +232,6 @@ class Tactile2DEnv(gym.Env):
                 "sample_points": np.array(self.image[0:1] * 255, dtype=np.uint8),
                 "reconstruction": np.array(self.image[1:3] * 255, dtype=np.uint8),
                 "ray": np.array(self.image[3:] * 255, dtype=np.uint8),
-                "prev_pos": self.prev_pos,
-                "prev_dir": self.prev_dir
             },
             reward,
             done,
@@ -288,10 +285,6 @@ class Tactile2DEnv(gym.Env):
 
         img = self.expected[0]
 
-        norm = np.linalg.norm(np.array([x_dir, y_dir]), ord=2)
-        x_dir /= norm
-        y_dir /= norm
-
         while (x_pos <= 99 and y_pos <= 99) and (x_pos >= 0 and y_pos >= 0):
             x_pos += x_dir
             y_pos += y_dir
@@ -313,16 +306,11 @@ class Tactile2DEnv(gym.Env):
             batch = next(self.dataloader)
         self.expected = batch["mask"].to(dtype=torch.long)
         self.iter = 0
-        
-        self.prev_pos = np.zeros((14, 2))
-        self.prev_dir = np.zeros((14, 2))
-        
+
         return {
             "sample_points": np.array(self.image[0:1] * 255, dtype=np.uint8),
             "reconstruction": np.array(self.image[1:3] * 255, dtype=np.uint8),
             "ray": np.array(self.image[3:] * 255, dtype=np.uint8),
-            "prev_pos": self.prev_pos,
-            "prev_dir": self.prev_dir
         }
 
     def render(self, mode="human", close=False):
@@ -337,10 +325,10 @@ if __name__ == "__main__":
     n_steps = 5
     total_timestamps = 5000000
     n_env = 8
-    device = "cuda"
+    device = "cpu"
     check_freq = 10000
 
-    experiment = wandb.init(project="tactile experiment", name="MultiInput", resume="allow", anonymous="must")
+    experiment = wandb.init(project="tactile experiment", name="MultiInputDiscrete", resume="allow", anonymous="must")
     experiment.config.update(
         dict(
             total_timestamps=total_timestamps, n_steps=n_steps, n_env=n_env, lr=lr, device=device, check_freq=check_freq
@@ -350,7 +338,7 @@ if __name__ == "__main__":
     model = UNet(n_channels=1, n_classes=2, bilinear=False)
 
     model.to(device)
-    model.load_state_dict(torch.load("./checkpoints/INTERRUPTED.pth", map_location=torch.device(device)))
+    # model.load_state_dict(torch.load("./checkpoints/INTERRUPTED.pth", map_location=torch.device(device)))
 
     # Create log dir
     log_dir = "./tmp/gym/"
@@ -378,7 +366,6 @@ if __name__ == "__main__":
     # Define and Train the agent
 
     callback = SaveOnBestTrainingRewardCallback(check_freq=check_freq, log_dir=log_dir, experiment=experiment)
-    policy_kwargs = dict(activation_fn=torch.nn.ReLU, net_arch=dict(pi=[32, 32, 32], vf=[32, 32, 32]))
     model = PPO(
         "MultiInputPolicy",
         env,
@@ -389,7 +376,6 @@ if __name__ == "__main__":
         # n_epochs=10, learning_rate=3e-4,
         seed=0,
         device=device,
-        policy_kwargs=policy_kwargs,
     )
     print(experiment.name)
     model.learn(total_timesteps=total_timestamps, callback=callback)
