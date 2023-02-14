@@ -239,7 +239,7 @@ class Tactile2DEnv(gym.Env):
         )
 
     def log(self):
-        if (self.global_iter % 1000) < 27 and self.iter == 14:
+        if (self.global_iter % 1000) < 27 and self.iter == 13:
             self.exp.log(
                 {
                     "obs": {
@@ -324,7 +324,7 @@ if __name__ == "__main__":
     n_steps = 5
     total_timestamps = 5000000
     n_env = 8
-    device = "cpu"
+    device = "cuda"
     check_freq = 10000
 
     experiment = wandb.init(project="tactile experiment", name="MultiInputDiscrete", resume="allow", anonymous="must")
@@ -337,7 +337,7 @@ if __name__ == "__main__":
     model = UNet(n_channels=1, n_classes=2, bilinear=False)
 
     model.to(device)
-    # model.load_state_dict(torch.load("./checkpoints/INTERRUPTED.pth", map_location=torch.device(device)))
+    model.load_state_dict(torch.load("./checkpoints/INTERRUPTED.pth", map_location=torch.device(device)))
 
     # Create log dir
     log_dir = "./tmp/gym/"
