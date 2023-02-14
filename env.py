@@ -163,7 +163,7 @@ class Tactile2DEnv(gym.Env):
         self.observation_space = spaces.Dict(
             {
                 "sample_points": spaces.Box(low=0, high=255, shape=(1, 100, 100), dtype=np.uint8),
-                "reconstruction": spaces.Box(low=0, high=255, shape=(2, 100, 100), dtype=np.uint8),
+                "reconstruction": spaces.Box(low=0, high=255, shape=(1, 100, 100), dtype=np.uint8),
                 "ray": spaces.Box(low=0, high=255, shape=(1, 100, 100), dtype=np.uint8),
             }
         )
@@ -209,7 +209,7 @@ class Tactile2DEnv(gym.Env):
         reward = 0
 
         # mark starting position
-        self.image[3, x_pos, y_pos] = 1
+        self.image[2, x_pos, y_pos] = 1
 
         # get sampled point and mark ray within function
         next_x, next_y = self._ray_cast(x_dir, y_dir, x_pos, y_pos)
@@ -230,8 +230,8 @@ class Tactile2DEnv(gym.Env):
         return (
             {
                 "sample_points": np.array(self.image[0:1] * 255, dtype=np.uint8),
-                "reconstruction": np.array(self.image[1:3] * 255, dtype=np.uint8),
-                "ray": np.array(self.image[3:] * 255, dtype=np.uint8),
+                "reconstruction": np.array(self.image[1:2] * 255, dtype=np.uint8),
+                "ray": np.array(self.image[2:] * 255, dtype=np.uint8),
             },
             reward,
             done,
@@ -243,11 +243,10 @@ class Tactile2DEnv(gym.Env):
             self.exp.log(
                 {
                     "obs": {
-                        "predicted_image_foreground": wandb.Image(self.image[2].float()),
-                        "predicted_image_background": wandb.Image(self.image[1].float()),
+                        "predicted_image_foreground": wandb.Image(self.image[1].float()),
                         "expected_image": wandb.Image(self.expected[0].float()),
                         "sample_points": wandb.Image(self.image[0].float()),
-                        "ray_points": wandb.Image(self.image[3].float()),
+                        "ray_points": wandb.Image(self.image[2].float()),
                     },
                     "step": self.global_iter,
                 }
@@ -258,7 +257,7 @@ class Tactile2DEnv(gym.Env):
         recons = self.model(self.image[None, None, 0, ...].to(device=self.device, dtype=torch.float32))
 
         argmax_recons = torch.argmax(recons, dim=1)
-        self.image[1:3, ...] = torch.nn.functional.softmax(recons.detach().cpu()[0], dim=0)
+        self.image[1, ...] = torch.nn.functional.softmax(recons.detach().cpu()[0], dim=0)[1]
         mask_pred = torch.functional.F.one_hot(argmax_recons, self.model.n_classes).permute(0, 3, 1, 2).float()
         mask_true = (
             torch.functional.F.one_hot(self.expected.to(self.device), self.model.n_classes).permute(0, 3, 1, 2).float()
@@ -291,14 +290,14 @@ class Tactile2DEnv(gym.Env):
 
             x, y = np.clip(int(x_pos), a_min=0, a_max=99, dtype=int), np.clip(int(y_pos), a_min=0, a_max=99, dtype=int)
             # plot the ray for observation
-            self.image[3, x, y] = 1
+            self.image[2, x, y] = 1
             if img[x, y]:
                 return x, y
 
         return -1, -1
 
     def reset(self):
-        self.image = torch.zeros((4, 100, 100), dtype=torch.float32)
+        self.image = torch.zeros((3, 100, 100), dtype=torch.float32)
         try:
             batch = next(self.dataloader)
         except Exception:
@@ -309,8 +308,8 @@ class Tactile2DEnv(gym.Env):
 
         return {
             "sample_points": np.array(self.image[0:1] * 255, dtype=np.uint8),
-            "reconstruction": np.array(self.image[1:3] * 255, dtype=np.uint8),
-            "ray": np.array(self.image[3:] * 255, dtype=np.uint8),
+            "reconstruction": np.array(self.image[1:2] * 255, dtype=np.uint8),
+            "ray": np.array(self.image[2:] * 255, dtype=np.uint8),
         }
 
     def render(self, mode="human", close=False):
