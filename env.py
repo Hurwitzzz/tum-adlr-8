@@ -1,4 +1,5 @@
 import os
+import time
 from typing import Callable, Union
 
 import gym
@@ -6,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from gym import spaces
+from PIL import Image
 from stable_baselines3.common import results_plotter
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.env_util import make_vec_env
@@ -63,7 +65,7 @@ def plot_results(log_folder, title="Learning Curve"):
     x, y = ts2xy(load_results(log_folder), "timesteps")
     y = moving_average(y, window=50)
     # Truncate x
-    x = x[len(x) - len(y) :]
+    x = x[len(x) - len(y):]
 
     _ = plt.figure(title)
     plt.plot(x, y)
@@ -159,6 +161,7 @@ class Tactile2DEnv(gym.Env):
         self.iter = 0
         self.global_iter = 0
         self.coef = 0
+        self.ray_images = []
 
         # Example for using image as input (channel-first; channel-last also works):
         self.observation_space = spaces.Dict(
@@ -239,20 +242,28 @@ class Tactile2DEnv(gym.Env):
             {},
         )
 
-    def log(self):
-        if (self.global_iter % 1000) < 27 and self.iter == 13:
-            self.exp.log(
-                {
-                    "obs": {
-                        "predicted_image_foreground": wandb.Image(self.image[1].float()),
-                        "expected_image": wandb.Image(self.expected[0].float()),
-                        "sample_points": wandb.Image(self.image[0].float()),
-                        "ray_points": wandb.Image(self.image[2].float()),
-                    },
-                    "step": self.global_iter,
-                    "dice_coef": self.coef
-                }
-            )
+    def log(self, n_iter=1000):
+        if self.global_iter % n_iter < 27 and self.iter < 14:
+            self.ray_images.append(Image.fromarray(self.image[2].float()))
+            if self.iter == 13:
+                name = f"./tmp/gifs/{time.time()}.gif"
+                self.ray_images[0].save(
+                    name, save_all=True, append_images=self.ray_images[1:], optimize=False, duration=14, loop=1
+                )
+
+                self.exp.log(
+                    {
+                        "obs": {
+                            "predicted_image_foreground": wandb.Image(self.image[1].float()),
+                            "expected_image": wandb.Image(self.expected[0].float()),
+                            "sample_points": wandb.Image(self.image[0].float()),
+                            "ray_points": wandb.Image(self.image[2].float()),
+                            "ray": wandb.Video(name, fps=1, format="gif"),
+                        },
+                        "step": self.global_iter,
+                        "dice_coef": self.coef,
+                    }
+                )
 
     def get_reward(self):
         # generate reconstruction and calculate reward
@@ -310,6 +321,7 @@ class Tactile2DEnv(gym.Env):
         self.expected = batch["mask"].to(dtype=torch.long)
         self.iter = 0
         self.coef = 0
+        self.ray_images = []
 
         return {
             "sample_points": np.array(self.image[0:1] * 255, dtype=np.uint8),
@@ -328,9 +340,9 @@ if __name__ == "__main__":
     lr = 7e-4
     n_steps = 5
     total_timestamps = 5000000
-    n_env = 8
+    n_env = 2
     device = "cuda"
-    check_freq = 10000
+    check_freq = 1000
 
     experiment = wandb.init(project="tactile experiment", name="MultiInputDiscrete", resume="allow", anonymous="must")
     experiment.config.update(
