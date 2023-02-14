@@ -158,6 +158,7 @@ class Tactile2DEnv(gym.Env):
         self.expected = None
         self.iter = 0
         self.global_iter = 0
+        self.coef = 0
 
         # Example for using image as input (channel-first; channel-last also works):
         self.observation_space = spaces.Dict(
@@ -249,6 +250,7 @@ class Tactile2DEnv(gym.Env):
                         "ray_points": wandb.Image(self.image[2].float()),
                     },
                     "step": self.global_iter,
+                    "dice_coef": self.coef
                 }
             )
 
@@ -256,14 +258,16 @@ class Tactile2DEnv(gym.Env):
         # generate reconstruction and calculate reward
         recons = self.model(self.image[None, None, 0, ...].to(device=self.device, dtype=torch.float32))
 
-        argmax_recons = torch.argmax(recons, dim=1)
-        self.image[1, ...] = torch.nn.functional.softmax(recons.detach().cpu()[0], dim=0)[1]
-        mask_pred = torch.functional.F.one_hot(argmax_recons, self.model.n_classes).permute(0, 3, 1, 2).float()
+        softmax_recons = torch.nn.functional.softmax(recons, dim=1)
+        self.image[1, ...] = softmax_recons[0].detach().cpu()
+
         mask_true = (
             torch.functional.F.one_hot(self.expected.to(self.device), self.model.n_classes).permute(0, 3, 1, 2).float()
         )
-        coef = multiclass_dice_coeff(mask_pred[:, 1:, ...], mask_true[:, 1:, ...], reduce_batch_first=True)
+
+        coef = multiclass_dice_coeff(softmax_recons[:, 1:, ...], mask_true[:, 1:, ...], reduce_batch_first=True)
         coef = coef.detach().cpu().item()
+        self.coef = coef
         return coef
 
     def _ray_cast(self, x_dir, y_dir, x_pos, y_pos):
@@ -305,6 +309,7 @@ class Tactile2DEnv(gym.Env):
             batch = next(self.dataloader)
         self.expected = batch["mask"].to(dtype=torch.long)
         self.iter = 0
+        self.coef = 0
 
         return {
             "sample_points": np.array(self.image[0:1] * 255, dtype=np.uint8),
@@ -338,6 +343,7 @@ if __name__ == "__main__":
 
     model.to(device)
     model.load_state_dict(torch.load("./checkpoints/INTERRUPTED.pth", map_location=torch.device(device)))
+    model.eval()
 
     # Create log dir
     log_dir = "./tmp/gym/"

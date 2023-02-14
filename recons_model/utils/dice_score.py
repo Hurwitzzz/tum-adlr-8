@@ -8,7 +8,7 @@ def dice_coeff(input: Tensor, target: Tensor, reduce_batch_first: bool = False, 
     if input.dim() == 2 and reduce_batch_first:
         raise ValueError(f'Dice: asked to reduce batch but got tensor without batch dimension (shape {input.shape})')
 
-    if input.dim() == 2 or reduce_batch_first:
+    if input.dim() == 2 or not reduce_batch_first:
         inter = torch.dot(input.reshape(-1), target.reshape(-1))
         sets_sum = torch.sum(input) + torch.sum(target)
         if sets_sum.item() == 0:
