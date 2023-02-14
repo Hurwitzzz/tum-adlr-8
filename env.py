@@ -259,7 +259,7 @@ class Tactile2DEnv(gym.Env):
         recons = self.model(self.image[None, None, 0, ...].to(device=self.device, dtype=torch.float32))
 
         softmax_recons = torch.nn.functional.softmax(recons, dim=1)
-        self.image[1, ...] = softmax_recons[0].detach().cpu()
+        self.image[1, ...] = softmax_recons[0, 1].detach().cpu()
 
         mask_true = (
             torch.functional.F.one_hot(self.expected.to(self.device), self.model.n_classes).permute(0, 3, 1, 2).float()
