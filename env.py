@@ -244,11 +244,13 @@ class Tactile2DEnv(gym.Env):
 
     def log(self, n_iter=1000):
         if self.global_iter % n_iter < 27 and self.iter < 14:
-            self.ray_images.append(Image.fromarray(self.image[2].float()))
+            self.ray_images.append(Image.fromarray(np.array(self.image[2].float()*255, dtype=np.uint8), mode="L").convert("P"))
+            # print(self.image.shape)
             if self.iter == 13:
+                os.makedirs("./tmp/gifs", exist_ok = True) 
                 name = f"./tmp/gifs/{time.time()}.gif"
                 self.ray_images[0].save(
-                    name, save_all=True, append_images=self.ray_images[1:], optimize=False, duration=14, loop=1
+                    name, save_all=True, append_images=self.ray_images[1:], optimize=False, duration=500, loop=0
                 )
 
                 self.exp.log(
