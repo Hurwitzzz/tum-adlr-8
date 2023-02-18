@@ -1,7 +1,7 @@
 import os
 import time
 from typing import Callable, Union
-
+from stable_baselines3 import DQN
 import gym
 import matplotlib.pyplot as plt
 import numpy as np
@@ -160,7 +160,7 @@ class Tactile2DEnv(gym.Env):
         self.expected = None
         self.iter = 0
         self.global_iter = 0
-        self.coef = 0
+        self.coef = 0.5
         self.ray_images = []
 
         # Example for using image as input (channel-first; channel-last also works):
@@ -210,7 +210,7 @@ class Tactile2DEnv(gym.Env):
         x_dir, y_dir, x_pos, y_pos = self.convert_discrete_actions_into_meaningful_actions(action)
 
         # define reward
-        reward = 0
+        reward = -self.coef
 
         # mark starting position
         self.image[2, x_pos, y_pos] = 1
@@ -242,7 +242,7 @@ class Tactile2DEnv(gym.Env):
             {},
         )
 
-    def log(self, n_iter=1000):
+    def log(self, n_iter=10000):
         if self.global_iter % n_iter < 27 and self.iter < 14:
             self.ray_images.append(Image.fromarray(np.array(self.image[2].float()*255, dtype=np.uint8), mode="L").convert("P"))
             # print(self.image.shape)
@@ -322,7 +322,7 @@ class Tactile2DEnv(gym.Env):
             batch = next(self.dataloader)
         self.expected = batch["mask"].to(dtype=torch.long)
         self.iter = 0
-        self.coef = 0
+        self.coef = 0.5
         self.ray_images = []
 
         return {
@@ -342,11 +342,11 @@ if __name__ == "__main__":
     lr = 7e-4
     n_steps = 5
     total_timestamps = 5000000
-    n_env = 2
+    n_env = 4
     device = "cuda"
-    check_freq = 1000
+    check_freq = 10000
 
-    experiment = wandb.init(project="tactile experiment", name="MultiInputDiscrete", resume="allow", anonymous="must")
+    experiment = wandb.init(project="tactile experiment", name="Cont-MultiInputDiscrete", resume="allow", anonymous="must")
     experiment.config.update(
         dict(
             total_timestamps=total_timestamps, n_steps=n_steps, n_env=n_env, lr=lr, device=device, check_freq=check_freq
@@ -396,6 +396,7 @@ if __name__ == "__main__":
         seed=0,
         device=device,
     )
+    model = PPO.load("./tmp/gym/best_modelMultiInputDiscrete.zip", env=env, seed=0, device=device, learning_reate=linear_schedule(1e-4))
     print(experiment.name)
     model.learn(total_timesteps=total_timestamps, callback=callback)
 
