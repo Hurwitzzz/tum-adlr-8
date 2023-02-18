@@ -14,12 +14,14 @@ from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.results_plotter import load_results, ts2xy
 from stable_baselines3.ppo import PPO
 from torch.utils.data import DataLoader
+import torch.nn.functional as F
 
 import wandb
 from recons_model.train import dir_mask, train_dir_img
 from recons_model.unet import UNet
 from recons_model.utils.data_loading import Tactile2dDataset
 from recons_model.utils.dice_score import multiclass_dice_coeff
+
 
 # from recons_model.utils.dice_score import dice_loss
 
@@ -162,6 +164,7 @@ class Tactile2DEnv(gym.Env):
         self.global_iter = 0
         self.coef = 0
         self.ray_images = []
+        self.recons_images = []     # Storing recons .gif
 
         # Example for using image as input (channel-first; channel-last also works):
         self.observation_space = spaces.Dict(
@@ -245,18 +248,23 @@ class Tactile2DEnv(gym.Env):
     def log(self, n_iter=1000):
         if self.global_iter % n_iter < 27 and self.iter < 14:
             self.ray_images.append(Image.fromarray(np.array(self.image[2].float()*255, dtype=np.uint8), mode="L").convert("P"))
+            self.recons_images.append(Image.fromarray(np.array(self.image[1].float()*255, dtype=np.uint8), mode="L").convert("P"))
             # print(self.image.shape)
             if self.iter == 13:
                 os.makedirs("./tmp/gifs", exist_ok = True) 
                 name = f"./tmp/gifs/{time.time()}.gif"
+                name_recons = f"./tmp/gifs/recons_{time.time()}.gif"
                 self.ray_images[0].save(
                     name, save_all=True, append_images=self.ray_images[1:], optimize=False, duration=500, loop=0
+                )
+                self.recons_images[0].save(
+                    name_recons, save_all=True, append_images=self.recons_images[1:], optimize=False, duration=500, loop=0
                 )
 
                 self.exp.log(
                     {
                         "obs": {
-                            "predicted_image_foreground": wandb.Image(self.image[1].float()),
+                            "predicted_image": wandb.Video(name_recons, fps=1, format="gif"),
                             "expected_image": wandb.Image(self.expected[0].float()),
                             "sample_points": wandb.Image(self.image[0].float()),
                             "ray_points": wandb.Image(self.image[2].float()),
@@ -269,16 +277,16 @@ class Tactile2DEnv(gym.Env):
 
     def get_reward(self):
         # generate reconstruction and calculate reward
-        recons = self.model(self.image[None, None, 0, ...].to(device=self.device, dtype=torch.float32))
-
-        softmax_recons = torch.nn.functional.softmax(recons, dim=1)
-        self.image[1, ...] = softmax_recons[0, 1].detach().cpu()
+        recons = self.model(self.image[None, None, 0, ...].to(device=self.device, dtype=torch.float32)) # torch.Size([1, 2, 100, 100])
+        self.image[1,...] = recons.argmax(dim=1)[0]
+        recons = F.one_hot(recons.argmax(dim=1), self.model.n_classes).permute(0, 3, 1, 2).float()      # torch.Size([1, 2, 100, 100]) (batch_size, #class, 100, 100)
 
         mask_true = (
             torch.functional.F.one_hot(self.expected.to(self.device), self.model.n_classes).permute(0, 3, 1, 2).float()
-        )
+        )  # torch.Size([1, 2, 100, 100])
 
-        coef = multiclass_dice_coeff(softmax_recons[:, 1:, ...], mask_true[:, 1:, ...], reduce_batch_first=True)
+        # ignoring background
+        coef = multiclass_dice_coeff(recons[:, 1:, ...], mask_true[:, 1:, ...], reduce_batch_first=True)
         coef = coef.detach().cpu().item()
         self.coef = coef
         return coef
@@ -324,6 +332,7 @@ class Tactile2DEnv(gym.Env):
         self.iter = 0
         self.coef = 0
         self.ray_images = []
+        self.recons_images = []
 
         return {
             "sample_points": np.array(self.image[0:1] * 255, dtype=np.uint8),
@@ -341,7 +350,7 @@ class Tactile2DEnv(gym.Env):
 if __name__ == "__main__":
     lr = 7e-4
     n_steps = 5
-    total_timestamps = 5000000
+    total_timestamps = 50
     n_env = 2
     device = "cuda"
     check_freq = 1000
