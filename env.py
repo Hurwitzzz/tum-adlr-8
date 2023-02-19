@@ -12,12 +12,13 @@ from stable_baselines3.common import results_plotter
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.results_plotter import load_results, ts2xy
+from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.ppo import PPO
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
 
 import wandb
-from recons_model.train import dir_mask, train_dir_img
+from recons_model.train import dir_mask, train_dir_img, test_dir_img
 from recons_model.unet import UNet
 from recons_model.utils.data_loading import Tactile2dDataset
 from recons_model.utils.dice_score import multiclass_dice_coeff
@@ -130,6 +131,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                     if self.verbose > 0:
                         print(f"Saving new best model to {self.save_path}.zip")
                     self.model.save(self.save_path + str(experiment.name))
+                    self.model.policy.save(self.save_path +"_policy_" +str(experiment.name))
 
         return True
 
@@ -244,7 +246,7 @@ class Tactile2DEnv(gym.Env):
             done,
             {},
         )
-
+    
     def log(self, n_iter=10000):
         if self.global_iter % n_iter < 27 and self.iter < 14:
             self.ray_images.append(Image.fromarray(np.array(self.image[2].float()*255, dtype=np.uint8), mode="L").convert("P"))
@@ -355,7 +357,7 @@ if __name__ == "__main__":
     device = "cuda"
     check_freq = 10000
 
-    experiment = wandb.init(project="tactile experiment", name="Cont-MultiInputDiscrete", resume="allow", anonymous="must")
+    experiment = wandb.init(project="tactile experiment", name="Evaluation", resume="allow", anonymous="must")
     experiment.config.update(
         dict(
             total_timestamps=total_timestamps, n_steps=n_steps, n_env=n_env, lr=lr, device=device, check_freq=check_freq
@@ -375,6 +377,7 @@ if __name__ == "__main__":
     # Logs will be saved in log_dir/monitor.csv
     batch_size = 1
     train_set = Tactile2dDataset(train_dir_img, dir_mask, 1.0)
+    test_set = Tactile2dDataset(test_dir_img, dir_mask,scale=1)
     loader_args = dict(batch_size=batch_size, num_workers=4, pin_memory=True)
 
     env = make_vec_env(
@@ -407,7 +410,27 @@ if __name__ == "__main__":
     )
     model = PPO.load("./tmp/gym/best_modelMultiInputDiscrete.zip", env=env, seed=0, device=device, learning_reate=linear_schedule(1e-4))
     print(experiment.name)
-    model.learn(total_timesteps=total_timestamps, callback=callback)
+
+    # Training process
+    # model.learn(total_timesteps=total_timestamps, callback=callback)
+    
+    # Evaluating process
+    env = make_vec_env(
+        Tactile2DEnv,
+        n_envs=n_env,
+        monitor_dir=log_dir,
+        env_kwargs={
+            "recons_model": model,
+            "dataset": test_set,
+            "device": device,
+            "experiment": experiment,
+            "loader_args": loader_args,
+        },
+    )
+    # saved_policy=PPO.load("./tmp/gym/best_model_policy_Evaluation")
+    # evaluate_policy(model.policy,env,n_eval_episodes=10)
+    model.learn(total_timesteps=total_timestamps)
+
 
     results_plotter.plot_results([log_dir], total_timestamps, results_plotter.X_TIMESTEPS, "Tactile")
     plot_results(log_dir)
