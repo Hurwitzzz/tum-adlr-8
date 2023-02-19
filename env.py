@@ -1,5 +1,6 @@
 import os
 import time
+from statistics import mean
 from typing import Callable, Union
 from stable_baselines3 import DQN
 import gym
@@ -141,7 +142,7 @@ class Tactile2DEnv(gym.Env):
 
     metadata = {"render.modes": ["human"]}
 
-    def __init__(self, recons_model, dataset, device, experiment, loader_args):
+    def __init__(self, recons_model, dataset, device, experiment, loader_args, max_rays):
         super(Tactile2DEnv, self).__init__()
         # Define action and observation space
         # They must be gym.spaces objects
@@ -164,9 +165,13 @@ class Tactile2DEnv(gym.Env):
         self.expected = None
         self.iter = 0
         self.global_iter = 0
+        self.max_rays=max_rays
         self.coef = 0.5
         self.ray_images = []
         self.recons_images = []     # Storing recons .gif
+        self.coef_set=[]            # Contains dice score of one episode
+        self.coef_matrix=[]         # Contains dice score of all episode
+        self.num_tactiles = 0        # Number of tactile
 
         # Example for using image as input (channel-first; channel-last also works):
         self.observation_space = spaces.Dict(
@@ -227,14 +232,18 @@ class Tactile2DEnv(gym.Env):
         if next_x != -1 and next_y != -1 and self.image[0, next_x, next_y] != 1:
             # mark hit
             self.image[0, next_x, next_y] = 1
-            reward += self.get_reward()
+            coef=self.get_reward()
+            reward += coef
+            if self.num_tactiles < 14:
+                self.coef_set.append(coef)
+                self.num_tactiles +=1
 
         self.log()
 
         self.iter += 1
         self.global_iter += 1
 
-        done = self.iter == 14
+        done = self.iter == max_rays
 
         return (
             {
@@ -247,36 +256,41 @@ class Tactile2DEnv(gym.Env):
             {},
         )
     
-    def log(self, n_iter=10000):
-        if self.global_iter % n_iter < 27 and self.iter < 14:
-            self.ray_images.append(Image.fromarray(np.array(self.image[2].float()*255, dtype=np.uint8), mode="L").convert("P"))
-            self.recons_images.append(Image.fromarray(np.array(self.image[1].float()*255, dtype=np.uint8), mode="L").convert("P"))
-            # print(self.image.shape)
-            if self.iter == 13:
-                os.makedirs("./tmp/gifs", exist_ok = True) 
-                name = f"./tmp/gifs/{time.time()}.gif"
-                name_recons = f"./tmp/gifs/recons_{time.time()}.gif"
-                self.ray_images[0].save(
-                    name, save_all=True, append_images=self.ray_images[1:], optimize=False, duration=500, loop=0
-                )
-                self.recons_images[0].save(
-                    name_recons, save_all=True, append_images=self.recons_images[1:], optimize=False, duration=500, loop=0
-                )
+    def log(self):
+        self.ray_images.append(Image.fromarray(np.array(self.image[2].float()*255, dtype=np.uint8), mode="L").convert("P"))
+        self.recons_images.append(Image.fromarray(np.array(self.image[1].float()*255, dtype=np.uint8), mode="L").convert("P"))
 
-                self.exp.log(
-                    {
-                        "obs": {
-                            "predicted_image_gif": wandb.Video(name_recons, fps=1, format="gif"),
-                            "predicted_image": wandb.Image(self.image[1].float()),
-                            "expected_image": wandb.Image(self.expected[0].float()),
-                            "sample_points": wandb.Image(self.image[0].float()),
-                            "ray_points": wandb.Image(self.image[2].float()),
-                            "ray_gif": wandb.Video(name, fps=1, format="gif"),
-                        },
-                        "step": self.global_iter,
-                        "dice_coef": self.coef,
-                    }
-                )
+        if self.iter == max_rays-1:
+
+            # extend coef_set to 14 length so that len(coef_matrix(dim=1))=14.
+            if len(self.coef_set) < 14:
+                self.coef_set.extend(self.coef_set[-1] for _ in range(14-len(self.coef_set)))
+            self.coef_matrix.append(self.coef_set)      # append the first 14 coef of an episode to the coef_matrix. Tctiles might be less than max_rays
+            
+            os.makedirs("./tmp/gifs", exist_ok = True) 
+            name = f"./tmp/gifs/{time.time()}.gif"
+            name_recons = f"./tmp/gifs/recons_{time.time()}.gif"
+            self.ray_images[0].save(
+                name, save_all=True, append_images=self.ray_images[1:], optimize=False, duration=500, loop=0
+            )
+            self.recons_images[0].save(
+                name_recons, save_all=True, append_images=self.recons_images[1:], optimize=False, duration=500, loop=0
+            )
+
+            self.exp.log(
+                {
+                    "obs": {
+                        "predicted_image_gif": wandb.Video(name_recons, fps=1, format="gif"),
+                        "predicted_image": wandb.Image(self.image[1].float()),
+                        "expected_image": wandb.Image(self.expected[0].float()),
+                        "sample_points": wandb.Image(self.image[0].float()),
+                        "ray_points": wandb.Image(self.image[2].float()),
+                        "ray_gif": wandb.Video(name, fps=1, format="gif"),
+                    },
+                    "step": self.global_iter,
+                    "dice_coef": self.coef,
+                }
+            )
 
     def get_reward(self):
         # generate reconstruction and calculate reward
@@ -334,8 +348,10 @@ class Tactile2DEnv(gym.Env):
         self.expected = batch["mask"].to(dtype=torch.long)
         self.iter = 0
         self.coef = 0.5
+        self.num_tactiles = 0
         self.ray_images = []
         self.recons_images = []
+        self.coef_set=[]
 
         return {
             "sample_points": np.array(self.image[0:1] * 255, dtype=np.uint8),
@@ -350,26 +366,56 @@ class Tactile2DEnv(gym.Env):
         pass
 
 
+def eval_agent(model, n_env, log_dir, recon_model, test_set, device, experiment, loader_args, max_rays):
+    '''
+    Change the #iter of each episode from 5 to 14, i.e. have most 5 to 14 rays. 
+    Evaluate the agent on test_set, return the average dice score over all samples
+
+    parameters:
+    model: rl model
+    max_rays: The max number of rays, i.e. #iter in one episod
+    recon_model: The reconstruction model
+    return:the average dice score over all samples
+    '''
+    env = make_vec_env(
+        Tactile2DEnv,
+        n_envs=n_env,
+        monitor_dir=log_dir,
+        env_kwargs={
+            "recons_model": recon_model,
+            "dataset": test_set,        # testset for evaluation
+            "device": device,
+            "experiment": experiment,
+            "loader_args": loader_args,
+            "max_rays": max_rays,
+        },
+    )
+    # #episode = #testset
+    evaluate_policy(model.policy,env,n_eval_episodes=len(test_set.ids))
+    return mean(env.coef_set)
+
+
 if __name__ == "__main__":
     lr = 7e-4
     n_steps = 5
     total_timestamps = 5000000
-    n_env = 4
+    n_env = 1
     device = "cuda"
     check_freq = 10000
+    max_rays = 30
 
-    experiment = wandb.init(project="tactile experiment", name="Evaluation", resume="allow", anonymous="must")
+    experiment = wandb.init(project="tactile experiment", resume="allow", anonymous="must")
     experiment.config.update(
         dict(
             total_timestamps=total_timestamps, n_steps=n_steps, n_env=n_env, lr=lr, device=device, check_freq=check_freq
         )
     )
 
-    model = UNet(n_channels=1, n_classes=2, bilinear=False)
+    recon_model = UNet(n_channels=1, n_classes=2, bilinear=False)
 
-    model.to(device)
-    model.load_state_dict(torch.load("./checkpoints/INTERRUPTED.pth", map_location=torch.device(device)))
-    model.eval()
+    recon_model.to(device)
+    recon_model.load_state_dict(torch.load("./checkpoints/INTERRUPTED.pth", map_location=torch.device(device)))
+    recon_model.eval()
 
     # Create log dir
     log_dir = "./tmp/gym/"
@@ -386,40 +432,50 @@ if __name__ == "__main__":
         n_envs=n_env,
         monitor_dir=log_dir,
         env_kwargs={
-            "recons_model": model,
+            "recons_model": recon_model,
             "dataset": test_set,        # testset for evaluation
             "device": device,
             "experiment": experiment,
             "loader_args": loader_args,
+            "max_rays": max_rays,
         },
     )
-    # env = Monitor(env, log_dir)
 
     # Define and Train the agent
 
     callback = SaveOnBestTrainingRewardCallback(check_freq=check_freq, log_dir=log_dir, experiment=experiment)
-    model = PPO(
-        "MultiInputPolicy",
-        env,
-        # n_steps=n_steps,
-        # use_rms_prop=False,
-        learning_rate=linear_schedule(lr),
-        # batch_size=16,
-        # n_epochs=10, learning_rate=3e-4,
-        seed=0,
-        device=device,
-    )
     model = PPO.load("./checkpoints/rl/best_modelCont-MultiInputDiscrete.zip", env=env, seed=0, device=device, learning_reate=linear_schedule(1e-4))
     print(experiment.name)
 
     # Training process
     # model.learn(total_timesteps=total_timestamps, callback=callback)
     
-    # Evaluating process
-    # saved_policy=PPO.load("./tmp/gym/best_model_policy_Evaluation")
-    evaluate_policy(model.policy,env,n_eval_episodes=10)
+    # Evaluating process  
+    # evaluate_policy(model.policy,env,n_eval_episodes=len(test_set.ids))
+    evaluate_policy(model.policy,env,n_eval_episodes=50)
+
+    # mean dice of rl policy
+    coef_matrix=env.envs[0].unwrapped.coef_matrix
+    dice_matrix=np.asarray(coef_matrix)
+    mean_dice=np.mean(dice_matrix,axis=0)       # average dice score of n_th tactile, n is in [1,14]
+    
+    # dice score of random policy
+    mean_dice_random_tactiles=np.array([0.668, 0.695,0.766,0.774,0.790,0.784,0.812,0.826,0.851,0.835,0.838,0.850,0.853,0.876])
+
+    # Compare rl policy and random policy
+    x = np.arange(1,15)  # num of tactiles
+
+    plt.figure(figsize=(5, 2.7), layout='constrained')
+    plt.plot(x, mean_dice, label='RL_Policy')  
+    plt.plot(x, mean_dice_random_tactiles, label='Random') 
+    plt.xlabel('number of tactiles')
+    plt.ylabel('average dice score')
+    plt.title("Comparation of RL policy and random policy")
+    plt.legend()
+    plt.show()
+    
 
 
 
-    results_plotter.plot_results([log_dir], total_timestamps, results_plotter.X_TIMESTEPS, "Tactile")
-    plot_results(log_dir)
+    # results_plotter.plot_results([log_dir], total_timestamps, results_plotter.X_TIMESTEPS, "Tactile")
+    # plot_results(log_dir)
