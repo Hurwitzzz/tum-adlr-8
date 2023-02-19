@@ -408,7 +408,7 @@ if __name__ == "__main__":
         seed=0,
         device=device,
     )
-    model = PPO.load("./tmp/gym/best_modelMultiInputDiscrete.zip", env=env, seed=0, device=device, learning_reate=linear_schedule(1e-4))
+    model = PPO.load("./checkpoints/rl/best_modelCont-MultiInputDiscrete.zip", env=env, seed=0, device=device, learning_reate=linear_schedule(1e-4))
     print(experiment.name)
 
     # Training process
