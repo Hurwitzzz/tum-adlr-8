@@ -266,11 +266,12 @@ class Tactile2DEnv(gym.Env):
                 self.exp.log(
                     {
                         "obs": {
-                            "predicted_image": wandb.Video(name_recons, fps=1, format="gif"),
+                            "predicted_image_gif": wandb.Video(name_recons, fps=1, format="gif"),
+                            "predicted_image": wandb.Image(self.image[1].float()),
                             "expected_image": wandb.Image(self.expected[0].float()),
                             "sample_points": wandb.Image(self.image[0].float()),
                             "ray_points": wandb.Image(self.image[2].float()),
-                            "ray": wandb.Video(name, fps=1, format="gif"),
+                            "ray_gif": wandb.Video(name, fps=1, format="gif"),
                         },
                         "step": self.global_iter,
                         "dice_coef": self.coef,
@@ -386,7 +387,7 @@ if __name__ == "__main__":
         monitor_dir=log_dir,
         env_kwargs={
             "recons_model": model,
-            "dataset": train_set,
+            "dataset": test_set,        # testset for evaluation
             "device": device,
             "experiment": experiment,
             "loader_args": loader_args,
@@ -415,21 +416,9 @@ if __name__ == "__main__":
     # model.learn(total_timesteps=total_timestamps, callback=callback)
     
     # Evaluating process
-    env = make_vec_env(
-        Tactile2DEnv,
-        n_envs=n_env,
-        monitor_dir=log_dir,
-        env_kwargs={
-            "recons_model": model,
-            "dataset": test_set,
-            "device": device,
-            "experiment": experiment,
-            "loader_args": loader_args,
-        },
-    )
     # saved_policy=PPO.load("./tmp/gym/best_model_policy_Evaluation")
-    # evaluate_policy(model.policy,env,n_eval_episodes=10)
-    model.learn(total_timesteps=total_timestamps)
+    evaluate_policy(model.policy,env,n_eval_episodes=10)
+
 
 
     results_plotter.plot_results([log_dir], total_timestamps, results_plotter.X_TIMESTEPS, "Tactile")
