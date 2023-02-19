@@ -173,7 +173,7 @@ def train_net(
                                 "train_images": wandb.Image(images[0].cpu()),
                                 "train_masks": {
                                     "true": wandb.Image(true_masks[0].float().cpu()),
-                                    "pred": wandb.Image(masks_pred.argmax(dim=1)[0].float().cpu()),
+                                    "pred": wandb.Image(masks_pred.argmax(dim=1)[0].float().cpu()),  
                                 },
                                 "val_images": wandb.Image(val_image[0].cpu()),
                                 "val_masks": {
