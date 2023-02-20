@@ -324,7 +324,6 @@ class Tactile2DEnv(gym.Env):
         if self.iter<14:
             self.coef = 1/65*self.iter+0.6  # coef changes from 0.6 to 0.8
         self.iter = 0
-        self.coef = 0.5
         self.ray_images = []
 
         return {
