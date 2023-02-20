@@ -321,6 +321,8 @@ class Tactile2DEnv(gym.Env):
             self.dataloader = iter(self.dataloader_)
             batch = next(self.dataloader)
         self.expected = batch["mask"].to(dtype=torch.long)
+        if self.iter<14:
+            self.coef = 1/65*self.iter+0.6  # coef changes from 0.6 to 0.8
         self.iter = 0
         self.coef = 0.5
         self.ray_images = []
@@ -396,7 +398,7 @@ if __name__ == "__main__":
         seed=0,
         device=device,
     )
-    model = PPO.load("./tmp/gym/best_modelMultiInputDiscrete.zip", env=env, seed=0, device=device, learning_reate=linear_schedule(1e-4))
+    model = PPO.load("./checkpoints/rl/best_modelCont-MultiInputDiscrete.zip", env=env, seed=0, device=device, learning_reate=linear_schedule(1e-4))
     print(experiment.name)
     model.learn(total_timesteps=total_timestamps, callback=callback)
 
