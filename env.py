@@ -348,7 +348,7 @@ if __name__ == "__main__":
     device = "cuda"
     check_freq = 10000
 
-    experiment = wandb.init(project="tactile experiment", name="Cont-MultiInputDiscrete", resume="allow", anonymous="must")
+    experiment = wandb.init(project="tactile experiment", name="LinearCoef", resume="allow", anonymous="must")
     experiment.config.update(
         dict(
             total_timestamps=total_timestamps, n_steps=n_steps, n_env=n_env, lr=lr, device=device, check_freq=check_freq
