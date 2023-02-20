@@ -237,6 +237,32 @@ class Tactile2DEnv(gym.Env):
             if self.num_tactiles < 14:
                 self.coef_set.append(coef)
                 self.num_tactiles +=1
+        # if get the same point as previous, then get a random ray
+        else:
+            # generate random ray until get a new point
+            while(not (next_x != -1 and next_y != -1 and self.image[0, next_x, next_y] != 1)):
+                # get random offset and direction
+                rand_offset_dir=np.random.randint(-10,10,2)
+                # the side of ray is not changed
+                action += np.concatenate(((np.array([0])),rand_offset_dir))   # np.array([0]) means don't change the side
+                # clip offset and direction within 100 and 180
+                action[1], action[2] = np.clip(action[1], a_min=0, a_max=99), np.clip(action[2], a_min=0, a_max=180)
+
+                x_dir, y_dir, x_pos, y_pos = self.convert_discrete_actions_into_meaningful_actions(action)
+                # define reward
+                reward = -self.coef
+                # mark starting position
+                self.image[2, x_pos, y_pos] = 1
+                # get sampled point and mark ray within function
+                next_x, next_y = self._ray_cast(x_dir, y_dir, x_pos, y_pos)
+            # mark hit
+            self.image[0, next_x, next_y] = 1
+            coef=self.get_reward()
+            reward += coef
+            if self.num_tactiles < 14:
+                self.coef_set.append(coef)
+                self.num_tactiles +=1
+
 
         self.log()
 
@@ -255,7 +281,7 @@ class Tactile2DEnv(gym.Env):
             done,
             {},
         )
-    
+
     def log(self):
         self.ray_images.append(Image.fromarray(np.array(self.image[2].float()*255, dtype=np.uint8), mode="L").convert("P"))
         self.recons_images.append(Image.fromarray(np.array(self.image[1].float()*255, dtype=np.uint8), mode="L").convert("P"))
@@ -263,11 +289,11 @@ class Tactile2DEnv(gym.Env):
         if self.iter == max_rays-1:
 
             # extend coef_set to 14 length so that len(coef_matrix(dim=1))=14.
-            if len(self.coef_set) < 14:
-                self.coef_set.extend(self.coef_set[-1] for _ in range(14-len(self.coef_set)))
+            # if len(self.coef_set) < 14:
+            #     self.coef_set.extend(self.coef_set[-1] for _ in range(14-len(self.coef_set)))
             self.coef_matrix.append(self.coef_set)      # append the first 14 coef of an episode to the coef_matrix. Tctiles might be less than max_rays
-            
-            os.makedirs("./tmp/gifs", exist_ok = True) 
+
+            os.makedirs("./tmp/gifs", exist_ok = True)
             name = f"./tmp/gifs/{time.time()}.gif"
             name_recons = f"./tmp/gifs/recons_{time.time()}.gif"
             self.ray_images[0].save(
@@ -347,11 +373,12 @@ class Tactile2DEnv(gym.Env):
             batch = next(self.dataloader)
         self.expected = batch["mask"].to(dtype=torch.long)
         if self.iter<14:
-            self.coef = 1/65*self.iter+0.6  # coef changes from 0.6 to 0.8 
-        self.iter = 0       
+            self.coef = 1/65*self.iter+0.6  # coef changes from 0.6 to 0.8
+        self.iter = 0
         self.num_tactiles = 0
         self.ray_images = []
         self.recons_images = []
+        self.coef_set=[]
 
         return {
             "sample_points": np.array(self.image[0:1] * 255, dtype=np.uint8),
@@ -368,7 +395,7 @@ class Tactile2DEnv(gym.Env):
 
 def eval_agent(model, n_env, log_dir, recon_model, test_set, device, experiment, loader_args, max_rays):
     '''
-    Change the #iter of each episode from 5 to 14, i.e. have most 5 to 14 rays. 
+    Change the #iter of each episode from 5 to 14, i.e. have most 5 to 14 rays.
     Evaluate the agent on test_set, return the average dice score over all samples
 
     parameters:
@@ -402,9 +429,9 @@ if __name__ == "__main__":
     n_env = 1
     device = "cuda"
     check_freq = 10000
-    max_rays = 30
+    max_rays = 14
 
-    experiment = wandb.init(project="tactile experiment", resume="allow", anonymous="must")
+    experiment = wandb.init(project="tactile experiment", name="LinearCoef", resume="allow", anonymous="must")
     experiment.config.update(
         dict(
             total_timestamps=total_timestamps, n_steps=n_steps, n_env=n_env, lr=lr, device=device, check_freq=check_freq
@@ -445,21 +472,22 @@ if __name__ == "__main__":
 
     callback = SaveOnBestTrainingRewardCallback(check_freq=check_freq, log_dir=log_dir, experiment=experiment)
     model = PPO.load("./checkpoints/rl/best_modelCont-MultiInputDiscrete.zip", env=env, seed=0, device=device, learning_reate=linear_schedule(1e-4))
+    # model = PPO.load("./checkpoints/rl/best_modelLinearCoef.zip", env=env, seed=0, device=device, learning_reate=linear_schedule(1e-4))
     print(experiment.name)
 
     # Training process
     # model.learn(total_timesteps=total_timestamps, callback=callback)
-    
-    # Evaluating process 
-     
+
+    # Evaluating process
+
     # evaluate_policy(model.policy,env,n_eval_episodes=len(test_set.ids))
-    evaluate_policy(model.policy,env,n_eval_episodes=50)
+    evaluate_policy(model.policy,env,n_eval_episodes=100)
 
     # mean dice of rl policy
     coef_matrix=env.envs[0].unwrapped.coef_matrix
     dice_matrix=np.asarray(coef_matrix)
     mean_dice=np.mean(dice_matrix,axis=0)       # average dice score of n_th tactile, n is in [1,14]
-    
+
     # dice score of random policy
     mean_dice_random_tactiles=np.array([0.668, 0.695,0.766,0.774,0.790,0.784,0.812,0.826,0.851,0.835,0.838,0.850,0.853,0.876])
 
@@ -467,14 +495,14 @@ if __name__ == "__main__":
     x = np.arange(1,15)  # num of tactiles
 
     plt.figure(figsize=(5, 2.7), layout='constrained')
-    plt.plot(x, mean_dice, label='RL_Policy')  
-    plt.plot(x, mean_dice_random_tactiles, label='Random') 
+    plt.plot(x, mean_dice, label='RL_Policy')
+    plt.plot(x, mean_dice_random_tactiles, label='Random')
     plt.xlabel('number of tactiles')
     plt.ylabel('average dice score')
     plt.title("Comparation of RL policy and random policy")
     plt.legend()
     plt.show()
-    
+
 
 
 
