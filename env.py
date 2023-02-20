@@ -166,7 +166,7 @@ class Tactile2DEnv(gym.Env):
         self.iter = 0
         self.global_iter = 0
         self.max_rays=max_rays
-        self.coef = 0.5
+        self.coef = 0.6
         self.ray_images = []
         self.recons_images = []     # Storing recons .gif
         self.coef_set=[]            # Contains dice score of one episode
@@ -346,12 +346,12 @@ class Tactile2DEnv(gym.Env):
             self.dataloader = iter(self.dataloader_)
             batch = next(self.dataloader)
         self.expected = batch["mask"].to(dtype=torch.long)
-        self.iter = 0
-        self.coef = 0.5
+        if self.iter<14:
+            self.coef = 1/65*self.iter+0.6  # coef changes from 0.6 to 0.8 
+        self.iter = 0       
         self.num_tactiles = 0
         self.ray_images = []
         self.recons_images = []
-        self.coef_set=[]
 
         return {
             "sample_points": np.array(self.image[0:1] * 255, dtype=np.uint8),
@@ -450,7 +450,8 @@ if __name__ == "__main__":
     # Training process
     # model.learn(total_timesteps=total_timestamps, callback=callback)
     
-    # Evaluating process  
+    # Evaluating process 
+     
     # evaluate_policy(model.policy,env,n_eval_episodes=len(test_set.ids))
     evaluate_policy(model.policy,env,n_eval_episodes=50)
 
