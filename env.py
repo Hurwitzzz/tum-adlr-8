@@ -431,7 +431,7 @@ if __name__ == "__main__":
     check_freq = 10000
     max_rays = 14
 
-    experiment = wandb.init(project="tactile experiment", name="LinearCoef", resume="allow", anonymous="must")
+    experiment = wandb.init(project="tactile experiment", name="Evaluate", resume="allow", anonymous="must")
     experiment.config.update(
         dict(
             total_timestamps=total_timestamps, n_steps=n_steps, n_env=n_env, lr=lr, device=device, check_freq=check_freq
@@ -471,7 +471,7 @@ if __name__ == "__main__":
     # Define and Train the agent
 
     callback = SaveOnBestTrainingRewardCallback(check_freq=check_freq, log_dir=log_dir, experiment=experiment)
-    model = PPO.load("./checkpoints/rl/best_modelCont-MultiInputDiscrete.zip", env=env, seed=0, device=device, learning_reate=linear_schedule(1e-4))
+    model = PPO.load("./checkpoints/rl/best_modelCoefReward-MultiInputDiscrete.zip", env=env, seed=0, device=device, learning_reate=linear_schedule(1e-4))
     # model = PPO.load("./checkpoints/rl/best_modelLinearCoef.zip", env=env, seed=0, device=device, learning_reate=linear_schedule(1e-4))
     print(experiment.name)
 
@@ -480,8 +480,8 @@ if __name__ == "__main__":
 
     # Evaluating process
 
-    evaluate_policy(model.policy,env,n_eval_episodes=len(test_set.ids))
-    # evaluate_policy(model.policy,env,n_eval_episodes=30)
+    # evaluate_policy(model.policy,env,n_eval_episodes=len(test_set.ids))
+    evaluate_policy(model.policy,env,n_eval_episodes=100)
 
     # mean dice of rl policy
     coef_matrix=env.envs[0].unwrapped.coef_matrix

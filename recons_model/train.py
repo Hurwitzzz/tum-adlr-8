@@ -21,10 +21,10 @@ from recons_model.utils.utils import EnlargePointsForVisualization, plot_example
 IFTEST=False # #Setting True to calculate the dice score of [1,14] samplings
 
 train_dir_img = Path("./overfit_data/sampled/train/02691156/")
-test_dir_img = Path("./overfit_data/sampled/test/02691156/")
+test_dir_img = Path("./overfit_data/sampled_remove_tiny_plane/test/02691156/")
 val_dir_img = Path("./overfit_data/sampled/val/02691156/")
 
-dir_mask = Path("./overfit_data/mask/02691156")
+dir_mask = Path("./overfit_data/mask_remove_tiny_plane/02691156")
 dir_checkpoint = Path("./checkpoints")
 
 # # For debugging on local computer
