@@ -242,7 +242,7 @@ class Tactile2DEnv(gym.Env):
             {},
         )
 
-    def log(self, n_iter=10000):
+    def log(self, n_iter=1000):
         if self.global_iter % n_iter < 27 and self.iter < 14:
             self.ray_images.append(Image.fromarray(np.array(self.image[2].float()*255, dtype=np.uint8), mode="L").convert("P"))
             # print(self.image.shape)
@@ -321,8 +321,9 @@ class Tactile2DEnv(gym.Env):
             self.dataloader = iter(self.dataloader_)
             batch = next(self.dataloader)
         self.expected = batch["mask"].to(dtype=torch.long)
+        if self.iter<14:
+            self.coef = 1/65*self.iter+0.6  # coef changes from 0.6 to 0.8
         self.iter = 0
-        self.coef = 0.5
         self.ray_images = []
 
         return {
@@ -344,9 +345,9 @@ if __name__ == "__main__":
     total_timestamps = 5000000
     n_env = 4
     device = "cuda"
-    check_freq = 10000
+    check_freq = 1000
 
-    experiment = wandb.init(project="tactile experiment", name="Cont-MultiInputDiscrete", resume="allow", anonymous="must")
+    experiment = wandb.init(project="tactile experiment", name="LinearCoef", resume="allow", anonymous="must")
     experiment.config.update(
         dict(
             total_timestamps=total_timestamps, n_steps=n_steps, n_env=n_env, lr=lr, device=device, check_freq=check_freq
@@ -396,7 +397,7 @@ if __name__ == "__main__":
         seed=0,
         device=device,
     )
-    model = PPO.load("./tmp/gym/best_modelMultiInputDiscrete.zip", env=env, seed=0, device=device, learning_reate=linear_schedule(1e-4))
+    # model = PPO.load("./checkpoints/rl/best_modelCont-MultiInputDiscrete.zip", env=env, seed=0, device=device, learning_reate=linear_schedule(1e-4))
     print(experiment.name)
     model.learn(total_timesteps=total_timestamps, callback=callback)
 
