@@ -216,7 +216,7 @@ class Tactile2DEnv(gym.Env):
 
         return x_dir, y_dir, x_pos, y_pos
 
-    def step(self, action):
+    def step(self, action):       
         x_dir, y_dir, x_pos, y_pos = self.convert_discrete_actions_into_meaningful_actions(action)
 
         # define reward
@@ -481,7 +481,7 @@ if __name__ == "__main__":
     # Evaluating process
 
     # evaluate_policy(model.policy,env,n_eval_episodes=len(test_set.ids))
-    evaluate_policy(model.policy,env,n_eval_episodes=100)
+    evaluate_policy(model.policy,env,n_eval_episodes=10)
 
     # mean dice of rl policy
     coef_matrix=env.envs[0].unwrapped.coef_matrix
