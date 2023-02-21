@@ -21,7 +21,7 @@ from recons_model.utils.utils import EnlargePointsForVisualization, plot_example
 IFTEST=False # #Setting True to calculate the dice score of [1,14] samplings
 
 train_dir_img = Path("./overfit_data/sampled/train/02691156/")
-test_dir_img = Path("./overfit_data/sampled/splited_test/02691156/1")
+test_dir_img = Path("./overfit_data/sampled/test/02691156/")
 val_dir_img = Path("./overfit_data/sampled/val/02691156/")
 
 dir_mask = Path("./overfit_data/mask/02691156")
@@ -252,6 +252,7 @@ def train_net(
             val_score, (dice_score_set,val_image_set, val_mask_pred_set, val_mask_true_set) = predict(net, test_loader, device)       
 
             logging.info(f"Validation Dice score of {num_samplings} samplings: {val_score}")
+
             for i in range(len(val_image_set)):
                 for j in range(val_image_set[i].size(dim=0)): #size(dim=0) is #batch_size (but not for the last batch)
                     experiment.log(

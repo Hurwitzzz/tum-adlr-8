@@ -480,8 +480,8 @@ if __name__ == "__main__":
 
     # Evaluating process
 
-    # evaluate_policy(model.policy,env,n_eval_episodes=len(test_set.ids))
-    evaluate_policy(model.policy,env,n_eval_episodes=30)
+    evaluate_policy(model.policy,env,n_eval_episodes=len(test_set.ids))
+    # evaluate_policy(model.policy,env,n_eval_episodes=30)
 
     # mean dice of rl policy
     coef_matrix=env.envs[0].unwrapped.coef_matrix
