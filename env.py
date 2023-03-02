@@ -217,6 +217,13 @@ class Tactile2DEnv(gym.Env):
         return x_dir, y_dir, x_pos, y_pos
 
     def step(self, action):       
+        if RANDOM_MODEL:
+            # For random model
+            side = np.random.randint(0,4)
+            offset = np.random.randint(0,100)
+            dir = np.random.randint(0,180)
+            action=np.array([side, offset, dir])
+
         x_dir, y_dir, x_pos, y_pos = self.convert_discrete_actions_into_meaningful_actions(action)
 
         # define reward
@@ -236,9 +243,35 @@ class Tactile2DEnv(gym.Env):
             reward += coef
             if self.num_tactiles < 14:
                 self.coef_set.append(coef)
-                self.num_tactiles +=1
+                self.num_tactiles +=1 
+        # if point already exists and RANDOM_MODEL = True
+        elif RANDOM_MODEL and not MUST_HIT:
+            coef=self.get_reward()
+            self.coef_set.append(coef)
+        elif RANDOM_MODEL and  MUST_HIT:
+            while(not (next_x != -1 and next_y != -1 and self.image[0, next_x, next_y] != 1)):
+                 # For random model
+                side = np.random.randint(0,4)
+                offset = np.random.randint(0,100)
+                dir = np.random.randint(0,180)
+                action=np.array([side, offset, dir])
+                x_dir, y_dir, x_pos, y_pos = self.convert_discrete_actions_into_meaningful_actions(action)
+
+                # define reward
+                reward = -self.coef
+
+                # mark starting position
+                self.image[2, x_pos, y_pos] = 1
+
+                # get sampled point and mark ray within function
+                next_x, next_y = self._ray_cast(x_dir, y_dir, x_pos, y_pos)
+            # mark hit
+            self.image[0, next_x, next_y] = 1
+            coef=self.get_reward()
+            reward += coef
+            self.coef_set.append(coef)            
         # if get the same point as previous, then get a random ray
-        else:
+        elif not RANDOM_MODEL:
             # generate random ray until get a new point
             while(not (next_x != -1 and next_y != -1 and self.image[0, next_x, next_y] != 1)):
                 # get random offset and direction
@@ -262,7 +295,7 @@ class Tactile2DEnv(gym.Env):
             if self.num_tactiles < 14:
                 self.coef_set.append(coef)
                 self.num_tactiles +=1
-
+        
 
         self.log()
 
@@ -287,10 +320,10 @@ class Tactile2DEnv(gym.Env):
         self.recons_images.append(Image.fromarray(np.array(self.image[1].float()*255, dtype=np.uint8), mode="L").convert("P"))
 
         if self.iter == max_rays-1:
-
-            # extend coef_set to 14 length so that len(coef_matrix(dim=1))=14.
-            # if len(self.coef_set) < 14:
-            #     self.coef_set.extend(self.coef_set[-1] for _ in range(14-len(self.coef_set)))
+            if RANDOM_MODEL:
+                # extend coef_set to 14 length so that len(coef_matrix(dim=1))=14.
+                if len(self.coef_set) < 14:
+                    self.coef_set.extend(self.coef_set[-1] for _ in range(14-len(self.coef_set)))
             self.coef_matrix.append(self.coef_set)      # append the first 14 coef of an episode to the coef_matrix. Tctiles might be less than max_rays
 
             os.makedirs("./tmp/gifs", exist_ok = True)
@@ -480,8 +513,18 @@ if __name__ == "__main__":
 
     # Evaluating process
 
-    # evaluate_policy(model.policy,env,n_eval_episodes=len(test_set.ids))
-    evaluate_policy(model.policy,env,n_eval_episodes=10)
+    MUST_HIT = True
+    RANDOM_MODEL=True
+    evaluate_policy(model.policy,env,n_eval_episodes=len(test_set.ids))
+    # evaluate_policy(model.policy,env,n_eval_episodes=100)
+    # mean dice of rl policy
+    coef_matrix_randommodel=env.envs[0].unwrapped.coef_matrix
+    dice_matrix_randommodel=np.asarray(coef_matrix_randommodel)
+    mean_dice_randommodel=np.mean(dice_matrix_randommodel,axis=0)       # average dice score of n_th tactile, n is in [1,14]
+    
+    RANDOM_MODEL=False
+    evaluate_policy(model.policy,env,n_eval_episodes=len(test_set.ids))
+    # evaluate_policy(model.policy,env,n_eval_episodes=100)
 
     # mean dice of rl policy
     coef_matrix=env.envs[0].unwrapped.coef_matrix
@@ -496,7 +539,7 @@ if __name__ == "__main__":
 
     plt.figure(figsize=(5, 2.7), layout='constrained')
     plt.plot(x, mean_dice, label='RL_Policy')
-    plt.plot(x, mean_dice_random_tactiles, label='Random')
+    plt.plot(x, mean_dice_randommodel, label='Random_Policy')
     plt.xlabel('number of tactiles')
     plt.ylabel('average dice score')
     plt.title("Comparation of RL policy and random policy")
